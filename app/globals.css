@@ -1,0 +1,219 @@
+/* Sacred Computer — global theme */
+
+/* ANSI palette */
+:root {
+  --ansi-0-black: #000000;
+  --ansi-1-maroon: #800000;
+  --ansi-2-green: #008000;
+  --ansi-3-olive: #808000;
+  --ansi-4-navy: #000080;
+  --ansi-5-purple: #800080;
+  --ansi-6-teal: #008080;
+  --ansi-7-silver: #c0c0c0;
+  --ansi-8-gray: #808080;
+  --ansi-9-red: #ff0000;
+  --ansi-10-lime: #00ff00;
+  --ansi-11-yellow: #ffff00;
+  --ansi-12-blue: #0000ff;
+  --ansi-13-fuchsia: #ff00ff;
+  --ansi-14-aqua: #00ffff;
+  --ansi-15-white: #ffffff;
+
+  /* Grayscale ramp (selected entries used in components) */
+  --ansi-232-gray-8: #080808;
+  --ansi-240-gray-35: #585858;
+  --ansi-248-gray-66: #a8a8a8;
+  --ansi-252-gray-82: #d0d0d0;
+  --ansi-254-gray-92: #e4e4e4;
+
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Z-index scale */
+  --z-index-page: 1;
+  --z-index-tooltip: 2;
+  --z-index-modal: 3;
+  --z-index-dropdown: 4;
+  --z-index-navigation: 5;
+
+  /* Typography */
+  --font-size: 14px;
+  --theme-line-height-base: 1.5;
+}
+
+/* Light theme (default) */
+body,
+body.theme-light {
+  --theme-background: #ffffff;
+  --theme-background-input: #f5f5f5;
+  --theme-text: #000000;
+  --theme-border: #d0d0d0;
+  --theme-overlay: #a8a8a8;
+  --theme-focused-foreground: #e4e4e4;
+  --theme-button: #000000;
+  --theme-button-text: #ffffff;
+  --theme-red:   #d73a49;
+  --theme-green: #28a745;
+  --theme-blue:  #0366d6;
+}
+
+/* Dark theme */
+body.theme-dark {
+  --theme-background: #000000;
+  --theme-background-input: #1c1c1c;
+  --theme-text: #ffffff;
+  --theme-border: #585858;
+  --theme-overlay: #808080;
+  --theme-focused-foreground: #3a3a3a;
+  --theme-button: #ffffff;
+  --theme-button-text: #000000;
+  --theme-red:   #ff5555;
+  --theme-green: #55ff55;
+  --theme-blue:  #5555ff;
+}
+
+/* Dracula */
+body.theme-dracula {
+  --theme-background: #282a36;
+  --theme-background-input: #44475a;
+  --theme-text: #f8f8f2;
+  --theme-border: #6272a4;
+  --theme-overlay: #6272a4;
+  --theme-focused-foreground: #44475a;
+  --theme-button: #bd93f9;
+  --theme-button-text: #282a36;
+  --theme-red:   #ff5555;
+  --theme-green: #50fa7b;
+  --theme-blue:  #8be9fd;
+}
+
+/* Gruvbox Dark */
+body.theme-gruvbox {
+  --theme-background: #282828;
+  --theme-background-input: #3c3836;
+  --theme-text: #ebdbb2;
+  --theme-border: #504945;
+  --theme-overlay: #a89984;
+  --theme-focused-foreground: #3c3836;
+  --theme-button: #fabd2f;
+  --theme-button-text: #282828;
+  --theme-red:   #fb4934;
+  --theme-green: #b8bb26;
+  --theme-blue:  #83a598;
+}
+
+/* Monokai */
+body.theme-monokai {
+  --theme-background: #272822;
+  --theme-background-input: #3e3d32;
+  --theme-text: #f8f8f2;
+  --theme-border: #49483e;
+  --theme-overlay: #75715e;
+  --theme-focused-foreground: #3e3d32;
+  --theme-button: #a6e22e;
+  --theme-button-text: #272822;
+  --theme-red:   #f92672;
+  --theme-green: #a6e22e;
+  --theme-blue:  #66d9e8;
+}
+
+/* Tokyo Night */
+body.theme-tokyo {
+  --theme-background: #1a1b26;
+  --theme-background-input: #24283b;
+  --theme-text: #c0caf5;
+  --theme-border: #292e42;
+  --theme-overlay: #565f89;
+  --theme-focused-foreground: #24283b;
+  --theme-button: #7aa2f7;
+  --theme-button-text: #1a1b26;
+  --theme-red:   #f7768e;
+  --theme-green: #9ece6a;
+  --theme-blue:  #7aa2f7;
+}
+
+/* Catppuccin Mocha */
+body.theme-catppuccin {
+  --theme-background: #1e1e2e;
+  --theme-background-input: #313244;
+  --theme-text: #cdd6f4;
+  --theme-border: #45475a;
+  --theme-overlay: #6c7086;
+  --theme-focused-foreground: #313244;
+  --theme-button: #cba6f7;
+  --theme-button-text: #1e1e2e;
+  --theme-red:   #f38ba8;
+  --theme-green: #a6e3a1;
+  --theme-blue:  #89b4fa;
+}
+
+/* GitHub Dark */
+body.theme-github {
+  --theme-background: #0d1117;
+  --theme-background-input: #161b22;
+  --theme-text: #e6edf3;
+  --theme-border: #30363d;
+  --theme-overlay: #8b949e;
+  --theme-focused-foreground: #21262d;
+  --theme-button: #58a6ff;
+  --theme-button-text: #0d1117;
+  --theme-red:   #f85149;
+  --theme-green: #3fb950;
+  --theme-blue:  #58a6ff;
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+html {
+  font-size: var(--font-size);
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--theme-background);
+  color: var(--theme-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size);
+  line-height: var(--theme-line-height-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Derived aliases consumed by ActionButton */
+  --theme-button-foreground: var(--theme-button);
+  --theme-button-background: var(--theme-background);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+a:hover,
+a:focus {
+  background: var(--theme-focused-foreground);
+  outline: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}

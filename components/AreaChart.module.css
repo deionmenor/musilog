@@ -1,0 +1,39 @@
+.root {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.svg {
+  width: 100%;
+  flex: 1;
+  height: 0; /* overridden by flex: 1 */
+  display: block;
+  overflow: visible;
+}
+
+.grid {
+  stroke: var(--theme-border);
+  stroke-width: 1;
+  opacity: 0.4;
+}
+
+.bar {
+  fill: var(--theme-button-foreground);
+  opacity: 0.85;
+}
+
+.label {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 13px;
+  fill: var(--theme-text);
+  opacity: 0.5;
+}
+
+.total {
+  text-align: right;
+  font-size: 0.75rem;
+  opacity: 0.45;
+  margin-top: 0.25rem;
+}

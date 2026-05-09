@@ -1,0 +1,14 @@
+.player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* YT.Player replaces its target div with an iframe — make it fill the container */
+.player :global(iframe) {
+  width: 100% !important;
+  height: 100% !important;
+  border: none;
+  display: block;
+}

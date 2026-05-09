@@ -1,0 +1,8 @@
+.avatarCol {
+  width: 4ch;
+  padding-right: 1ch !important;
+}
+
+.sharedArtists {
+  color: var(--theme-overlay);
+}

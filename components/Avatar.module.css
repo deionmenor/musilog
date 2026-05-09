@@ -1,0 +1,34 @@
+.parent {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.placeholder {
+  background: var(--theme-border);
+  display: inline-block;
+  width: 4ch;
+  height: calc(var(--font-size) * var(--theme-line-height-base) * 2);
+  vertical-align: bottom;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.root,
+a.root {
+  background: unset;
+  background-size: cover;
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  display: inline-block;
+  width: 4ch;
+  height: calc(var(--font-size) * var(--theme-line-height-base) * 2);
+  vertical-align: bottom;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.right {
+  min-width: 10%;
+  width: 100%;
+}

@@ -1,0 +1,85 @@
+.scrollWrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.root {
+  padding: 0;
+  border-collapse: collapse;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  width: 100%;
+}
+
+.root td {
+  padding: 0 2ch 0 0;
+  vertical-align: top;
+}
+
+.root td:last-child {
+  padding-right: 0;
+}
+
+.root thead td {
+  background: var(--ansi-240-gray-35);
+  color: var(--color-white);
+  font-weight: 400;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.headerRed thead td   { background: var(--theme-red);   color: var(--color-white); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+.headerGreen thead td { background: var(--theme-green); color: var(--color-white); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+.headerBlue thead td  { background: var(--theme-blue);  color: var(--color-white); text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+
+.root tbody tr:focus {
+  background: var(--theme-focused-foreground);
+  outline: 0;
+}
+
+.alignRight {
+  text-align: right;
+}
+
+.rankCell {
+  text-align: right;
+  color: var(--theme-overlay);
+  opacity: 0.45;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusOk {
+  color: var(--ansi-10-lime);
+  font-weight: 700;
+}
+
+.statusOff {
+  color: var(--ansi-248-gray-66);
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.clickable:hover {
+  background: var(--theme-focused-foreground);
+}
+
+.selectedRow {
+  background: var(--theme-focused-foreground);
+}
+
+@keyframes rowIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animateRow {
+  opacity: 0;
+  animation-name: rowIn;
+  animation-duration: 80ms;
+  animation-timing-function: ease;
+  animation-fill-mode: forwards;
+  animation-delay: calc(var(--row-index) * 60ms);
+}
