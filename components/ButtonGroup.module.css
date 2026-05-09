@@ -10,3 +10,17 @@
 .full > * > * {
   width: 100%;
 }
+
+.mobileDropdown {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .root {
+    display: none;
+  }
+
+  .mobileDropdown {
+    display: block;
+  }
+}

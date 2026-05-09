@@ -10,7 +10,6 @@ interface MBResult {
 async function resolveMBData(mbid: string | null, artist: string, album: string): Promise<MBResult> {
   try {
     if (mbid) {
-      // We already have the mbid — fetch the release directly for the date
       const res = await fetch(
         `https://musicbrainz.org/ws/2/release/${mbid}?fmt=json`,
         { headers: { 'User-Agent': MB_USER_AGENT } }
@@ -22,7 +21,6 @@ async function resolveMBData(mbid: string | null, artist: string, album: string)
       };
     }
 
-    // Search for release by artist + album name
     const res = await fetch(
       `https://musicbrainz.org/ws/2/release/?query=release:"${encodeURIComponent(album)}"+artist:"${encodeURIComponent(artist)}"&fmt=json&limit=1`,
       { headers: { 'User-Agent': MB_USER_AGENT } }
@@ -42,6 +40,22 @@ async function resolveMBData(mbid: string | null, artist: string, album: string)
   }
 }
 
+async function fetchArtistTopTrackPlaycounts(apiKey: string, artist: string): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  try {
+    const res = await fetch(
+      `https://ws.audioscrobbler.com/2.0/?method=artist.getTopTracks&artist=${encodeURIComponent(artist)}&limit=50&api_key=${apiKey}&format=json`
+    );
+    if (!res.ok) return map;
+    const data = await res.json();
+    const tracks: any[] = Array.isArray(data.toptracks?.track) ? data.toptracks.track : [];
+    for (const t of tracks) {
+      map.set(t.name.toLowerCase(), parseInt(t.playcount, 10) || 0);
+    }
+  } catch {}
+  return map;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const artist = searchParams.get('artist');
@@ -56,10 +70,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Last.fm API key not configured' }, { status: 500 });
   }
 
-  const res = await fetch(`https://ws.audioscrobbler.com/2.0/?method=album.getInfo&artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}&autocorrect=1&api_key=${apiKey}&format=json`);
-  if (!res.ok) return NextResponse.json({ error: 'Failed to fetch from Last.fm' }, { status: res.status });
+  const [albumRes, playcountMap] = await Promise.all([
+    fetch(`https://ws.audioscrobbler.com/2.0/?method=album.getInfo&artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}&autocorrect=1&api_key=${apiKey}&format=json`),
+    fetchArtistTopTrackPlaycounts(apiKey, artist),
+  ]);
 
-  const data = await res.json();
+  if (!albumRes.ok) return NextResponse.json({ error: 'Failed to fetch from Last.fm' }, { status: albumRes.status });
+
+  const data = await albumRes.json();
   if (data.error) return NextResponse.json({ error: data.message || 'Last.fm error' }, { status: 400 });
 
   const a = data.album;
@@ -74,6 +92,7 @@ export async function GET(request: NextRequest) {
         rank: i + 1,
         name: t.name,
         duration: parseInt(t.duration, 10) || 0,
+        playcount: playcountMap.get(t.name.toLowerCase()) ?? 0,
       }));
     })()),
     Promise.resolve((() => {
