@@ -45,7 +45,7 @@ function LineLoader({ mode }: { mode: FetchMode }) {
 }
 
 type Period = 'overall' | '7day' | '1month' | '3month' | '6month' | '12month' | 'this_month' | 'this_year' | 'custom';
-type Theme = 'light' | 'dracula' | 'gruvbox' | 'github' | 'monokai' | 'tokyo' | 'catppuccin';
+type Theme = 'light' | 'dracula' | 'gruvbox' | 'github' | 'monokai' | 'tokyo' | 'catppuccin' | 'onedark';
 
 const THEMES: { id: Theme; label: string }[] = [
   { id: 'light', label: 'LIGHT' },
@@ -55,6 +55,7 @@ const THEMES: { id: Theme; label: string }[] = [
   { id: 'monokai', label: 'MONOKAI' },
   { id: 'tokyo', label: 'TOKYO NIGHT' },
   { id: 'catppuccin', label: 'CATPPUCCIN' },
+  { id: 'onedark', label: 'ONE DARK' },
 ];
 
 const MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -227,7 +228,7 @@ export default function Home() {
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
-    const themes: Theme[] = ['light', 'dracula', 'gruvbox', 'github', 'monokai', 'tokyo', 'catppuccin'];
+    const themes: Theme[] = ['light', 'dracula', 'gruvbox', 'github', 'monokai', 'tokyo', 'catppuccin', 'onedark'];
     themes.forEach((t) => document.body.classList.remove(`theme-${t}`));
     document.body.classList.add(`theme-${theme}`);
   }, [theme]);
