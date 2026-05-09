@@ -162,6 +162,21 @@ body.theme-github {
   --theme-blue:  #58a6ff;
 }
 
+/* One Dark */
+body.theme-onedark {
+  --theme-background: #282c34;
+  --theme-background-input: #21252b;
+  --theme-text: #abb2bf;
+  --theme-border: #3e4452;
+  --theme-overlay: #5c6370;
+  --theme-focused-foreground: #2c313a;
+  --theme-button: #61afef;
+  --theme-button-text: #282c34;
+  --theme-red:   #e06c75;
+  --theme-green: #98c379;
+  --theme-blue:  #61afef;
+}
+
 /* Reset */
 *,
 *::before,
