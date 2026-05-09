@@ -1,0 +1,28 @@
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--theme-button-background);
+  box-shadow: inset 0 0 0 2px var(--theme-focused-foreground);
+  color: var(--theme-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size);
+  padding: 0 1ch;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  z-index: 100;
+}
+
+.root:hover .tip,
+.root:focus-within .tip {
+  opacity: 1;
+}
