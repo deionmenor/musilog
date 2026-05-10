@@ -59,7 +59,7 @@ function YoutubePlayer({ videoId, onEnded, onPlayingChange, onPlayerReady }: Pro
         videoId,
         width: '100%',
         height: '100%',
-        playerVars: { autoplay: 1, rel: 0, modestbranding: 1 },
+        playerVars: { autoplay: 1, rel: 0, modestbranding: 1, controls: 0, showinfo: 0, iv_load_policy: 3 },
         events: {
           onReady: (e: { target: any }) => {
             onPlayerReadyRef.current?.({

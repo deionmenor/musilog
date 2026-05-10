@@ -98,7 +98,6 @@ export default function RankMode() {
   const dragSrcRef = React.useRef<{ tier: TierKey; index: number } | null>(null);
   const tierListRef = React.useRef<HTMLDivElement>(null);
 
-  const hasResults = results.length > 0 || !!selectedAlbum;
 
   // ── Data fetching ─────────────────────────────────────────────────────────
 
@@ -398,144 +397,142 @@ export default function RankMode() {
         </Card>
       </div>
 
-      {hasResults && (
-        <div className={selectedAlbum ? styles.pageRow : styles.container}>
-          <div className={styles.container}>
-
-            {results.length > 0 && (
-              <Card title="SEARCH RESULTS">
-                <div className={styles.resultsList}>
-                  {results.map((album, i) => (
-                    <div key={i} className={styles.resultItem} onClick={() => handleSelectAlbum(album)} tabIndex={0} role="button"
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectAlbum(album); }}>
-                      {album.imageUrl && <img src={album.imageUrl} alt="" className={styles.resultThumb} />}
-                      <div className={styles.resultInfo}>
-                        <div className={styles.resultName}>{album.name}</div>
-                        <div className={styles.resultArtist}>{album.artist}</div>
-                      </div>
+      <div className={styles.pageRow}>
+        <div className={styles.container}>
+          {results.length > 0 && (
+            <Card title="SEARCH RESULTS">
+              <div className={styles.resultsList}>
+                {results.map((album, i) => (
+                  <div key={i} className={styles.resultItem} onClick={() => handleSelectAlbum(album)} tabIndex={0} role="button"
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectAlbum(album); }}>
+                    {album.imageUrl && <img src={album.imageUrl} alt="" className={styles.resultThumb} />}
+                    <div className={styles.resultInfo}>
+                      <div className={styles.resultName}>{album.name}</div>
+                      <div className={styles.resultArtist}>{album.artist}</div>
                     </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {selectedAlbum && (
-              <>
-                <div className={styles.toolbar}>
-                  <ActionButton onClick={handleBack}>← BACK</ActionButton>
-                  <ThemeDropdown
-                    label={VIEW_MODES.find((v) => v.id === viewMode)?.label ?? 'INLINE'}
-                    items={VIEW_MODES}
-                    currentId={viewMode}
-                    onSelect={(id) => setViewMode(id as ViewMode)}
-                  />
-                  <div className={styles.toolbarRight}>
-                    <button className={styles.exportBtn} onClick={handleExport} disabled={exporting || loadingTracks}>
-                      {exporting ? '...' : '↓ EXPORT'}
-                    </button>
                   </div>
-                </div>
-
-                {loadingTracks && <div className={styles.loading}>LOADING...</div>}
-
-                {!loadingTracks && (
-                  <div ref={tierListRef}>
-                    <Card title={`${selectedAlbum.name.toUpperCase()} — ${selectedAlbum.artist.toUpperCase()}`}>
-                      {viewMode === 'inline'   && renderInline()}
-                      {viewMode === 'classic'  && renderClassic()}
-                      {renderUnranked()}
-                    </Card>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {selectedAlbum && (
-            <div className={styles.sidebarCol}>
-              <Card title="ALBUM INFO">
-                {ytEmbed && (
-                  <>
-                    <div className={styles.ytEmbedWrapper}>
-                      <YoutubePlayer videoId={ytEmbed.videoId} onPlayingChange={setYtPlaying}
-                        onPlayerReady={(a) => { ytPlayerActionsRef.current = a; }}
-                        onEnded={() => { if (albumMeta && ytEmbed.trackIdx < albumMeta.tracks.length - 1) handleYtNavigate(ytEmbed.trackIdx + 1); }}
-                      />
-                    </div>
-                    <div className={styles.ytControls}>
-                      <div className={styles.ytNavButtons}>
-                        {ytEmbed.trackIdx > 0 && <ActionButton hotkey="←" onClick={() => handleYtNavigate(ytEmbed.trackIdx - 1)}>PREV</ActionButton>}
-                        {albumMeta?.tracks[ytEmbed.trackIdx + 1] && <ActionButton hotkey="→" onClick={() => handleYtNavigate(ytEmbed.trackIdx + 1)}>NEXT</ActionButton>}
-                      </div>
-                      <div className={styles.ytNavButtons}>
-                        <ActionButton onClick={() => ytPlaying ? ytPlayerActionsRef.current?.pause() : ytPlayerActionsRef.current?.play()}>
-                          {ytPlaying ? 'PAUSE' : 'PLAY'}
-                        </ActionButton>
-                        <ActionButton onClick={() => setYtEmbed(null)}>STOP</ActionButton>
-                      </div>
-                    </div>
-                  </>
-                )}
-                <div className={styles.sidebarContent}>
-                  <div className={styles.albumHeader}>
-                    {artUrl && (
-                      <div className={styles.albumThumb}>
-                        <img src={artUrl} alt={selectedAlbum.name} className={styles.thumbImg}
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      </div>
-                    )}
-                    <div className={styles.albumHeaderInfo}>
-                      <div className={styles.albumTitle}>{formatName(selectedAlbum.name)}</div>
-                      <div className={styles.albumSubtitle}>{selectedAlbum.artist}</div>
-                    </div>
-                  </div>
-                  {loadingTracks && <div className={styles.sidebarLoading}>LOADING...</div>}
-                  {albumMeta && (
-                    <>
-                      <div className={styles.statsRow}>
-                        {albumMeta.releaseDate && (
-                          <div className={styles.statItem}>
-                            <span>{albumMeta.releaseDate.slice(0, 4)}</span>
-                            <span className={styles.statLabel}>◈</span>
-                          </div>
-                        )}
-                        <div className={styles.statItem}>
-                          <span>{formatDuration(albumMeta.totalDuration)}</span>
-                          <span className={styles.statLabel}>◷</span>
-                        </div>
-                        <div className={styles.statItem}>
-                          <span>{formatCount(albumMeta.listeners)}</span>
-                          <span className={styles.statLabel}>◉</span>
-                        </div>
-                        <div className={styles.statItem}>
-                          <span>{formatCount(albumMeta.playcount)}</span>
-                          <span className={styles.statLabel}>↺</span>
-                        </div>
-                      </div>
-                      {albumMeta.tags.slice(0, 3).length > 0 && (
-                        <div className={styles.tags}>{albumMeta.tags.slice(0, 3).join(' · ')}</div>
-                      )}
-                      {albumMeta.tracks.length > 0 && (
-                        <div className={styles.sidebarTracks}>
-                          {albumMeta.tracks.map((t, tIdx) => (
-                            <div key={t.rank} className={styles.sidebarTrack}>
-                              <span className={styles.sidebarTrackNum}>{t.rank}.</span>
-                              <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
-                              {t.duration > 0 && <span className={styles.sidebarTrackDur}>{fmtDur(t.duration)}</span>}
-                              <SidebarPlayBtn artist={selectedAlbum.artist} track={t.name}
-                                onPlay={(videoId) => handlePlay(videoId, t.name, tIdx)} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
+            <>
+              <div className={styles.toolbar}>
+                <ActionButton onClick={handleBack}>← BACK</ActionButton>
+                <ThemeDropdown
+                  label={VIEW_MODES.find((v) => v.id === viewMode)?.label ?? 'INLINE'}
+                  items={VIEW_MODES}
+                  currentId={viewMode}
+                  onSelect={(id) => setViewMode(id as ViewMode)}
+                />
+                <div className={styles.toolbarRight}>
+                  <button className={styles.exportBtn} onClick={handleExport} disabled={exporting || loadingTracks}>
+                    {exporting ? '...' : '↓ EXPORT'}
+                  </button>
                 </div>
-              </Card>
-            </div>
+              </div>
+
+              {loadingTracks && <div className={styles.loading}>LOADING...</div>}
+
+              {!loadingTracks && (
+                <div ref={tierListRef}>
+                  <Card title={`${selectedAlbum.name.toUpperCase()} — ${selectedAlbum.artist.toUpperCase()}`}>
+                    {viewMode === 'inline'   && renderInline()}
+                    {viewMode === 'classic'  && renderClassic()}
+                    {renderUnranked()}
+                  </Card>
+                </div>
+              )}
+            </>
           )}
         </div>
-      )}
+
+        <div className={styles.sidebarCol}>
+          {ytEmbed && (
+            <Card title={ytEmbed.title}>
+              <div className={styles.ytEmbedWrapper}>
+                <YoutubePlayer videoId={ytEmbed.videoId} onPlayingChange={setYtPlaying}
+                  onPlayerReady={(a) => { ytPlayerActionsRef.current = a; }}
+                  onEnded={() => { if (albumMeta && ytEmbed.trackIdx < albumMeta.tracks.length - 1) handleYtNavigate(ytEmbed.trackIdx + 1); }}
+                />
+              </div>
+              <div className={styles.ytControls}>
+                <div className={styles.ytNavButtons}>
+                  {ytEmbed.trackIdx > 0 && <ActionButton hotkey="←" onClick={() => handleYtNavigate(ytEmbed.trackIdx - 1)}>PREV</ActionButton>}
+                  {albumMeta?.tracks[ytEmbed.trackIdx + 1] && <ActionButton hotkey="→" onClick={() => handleYtNavigate(ytEmbed.trackIdx + 1)}>NEXT</ActionButton>}
+                </div>
+                <div className={styles.ytNavButtons}>
+                  <ActionButton onClick={() => ytPlaying ? ytPlayerActionsRef.current?.pause() : ytPlayerActionsRef.current?.play()}>
+                    {ytPlaying ? 'PAUSE' : 'PLAY'}
+                  </ActionButton>
+                  <ActionButton onClick={() => setYtEmbed(null)}>STOP</ActionButton>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {selectedAlbum && (
+            <Card title="ALBUM INFO">
+              <div className={styles.sidebarContent}>
+                <div className={styles.albumHeader}>
+                  {artUrl && (
+                    <div className={styles.albumThumb}>
+                      <img src={artUrl} alt={selectedAlbum.name} className={styles.thumbImg}
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    </div>
+                  )}
+                  <div className={styles.albumHeaderInfo}>
+                    <div className={styles.albumTitle}>{formatName(selectedAlbum.name)}</div>
+                    <div className={styles.albumSubtitle}>{selectedAlbum.artist}</div>
+                  </div>
+                </div>
+                {loadingTracks && <div className={styles.sidebarLoading}>LOADING...</div>}
+                {albumMeta && (
+                  <>
+                    <div className={styles.statsRow}>
+                      {albumMeta.releaseDate && (
+                        <div className={styles.statItem}>
+                          <span>{albumMeta.releaseDate.slice(0, 4)}</span>
+                          <span className={styles.statLabel}>◈</span>
+                        </div>
+                      )}
+                      <div className={styles.statItem}>
+                        <span>{formatDuration(albumMeta.totalDuration)}</span>
+                        <span className={styles.statLabel}>◷</span>
+                      </div>
+                      <div className={styles.statItem}>
+                        <span>{formatCount(albumMeta.listeners)}</span>
+                        <span className={styles.statLabel}>◉</span>
+                      </div>
+                      <div className={styles.statItem}>
+                        <span>{formatCount(albumMeta.playcount)}</span>
+                        <span className={styles.statLabel}>↺</span>
+                      </div>
+                    </div>
+                    {albumMeta.tags.slice(0, 3).length > 0 && (
+                      <div className={styles.tags}>{albumMeta.tags.slice(0, 3).join(' · ')}</div>
+                    )}
+                    {albumMeta.tracks.length > 0 && (
+                      <div className={styles.sidebarTracks}>
+                        {albumMeta.tracks.map((t, tIdx) => (
+                          <div key={t.rank} className={styles.sidebarTrack}>
+                            <span className={styles.sidebarTrackNum}>{t.rank}.</span>
+                            <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
+                            {t.duration > 0 && <span className={styles.sidebarTrackDur}>{fmtDur(t.duration)}</span>}
+                            <SidebarPlayBtn artist={selectedAlbum.artist} track={t.name}
+                              onPlay={(videoId) => handlePlay(videoId, t.name, tIdx)} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
     </>
   );
 }
