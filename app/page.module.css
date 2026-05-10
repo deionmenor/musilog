@@ -155,10 +155,23 @@
 }
 
 
-.lyricsPlain {
-  white-space: pre-line;
-  opacity: 0.8;
+.lyricLine {
+  display: flex;
+  gap: 2ch;
   line-height: var(--theme-line-height-base);
+}
+
+.lyricLineNum {
+  flex-shrink: 0;
+  min-width: 3ch;
+  text-align: right;
+  opacity: 0.25;
+  user-select: none;
+}
+
+.lyricLineText {
+  flex: 1;
+  white-space: pre-wrap;
 }
 
 .lyricsStatus {

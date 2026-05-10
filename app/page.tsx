@@ -32,6 +32,23 @@ function Spinner() {
   return <span>{LOADER_FRAMES[frame]}</span>;
 }
 
+function LyricsContent({ lyrics, loading }: { lyrics: { plain: string | null; instrumental: boolean } | null; loading: boolean }) {
+  if (loading) return <div className={styles.lyricsStatus}>LOADING...</div>;
+  if (lyrics?.instrumental) return <div className={styles.lyricsStatus}>♪ Instrumental</div>;
+  if (lyrics && !lyrics.plain) return <div className={styles.lyricsStatus}>Lyrics not found.</div>;
+  if (!lyrics?.plain) return null;
+  return (
+    <div className={styles.lyricsScroll}>
+      {lyrics.plain.split('\n').map((line, i) => (
+        <div key={i} className={styles.lyricLine}>
+          <span className={styles.lyricLineNum}>{i + 1}</span>
+          <span className={styles.lyricLineText}>{line}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LineLoader({ mode }: { mode: FetchMode }) {
   const [frame, setFrame] = React.useState(0);
   React.useEffect(() => {
@@ -861,16 +878,7 @@ export default function Home() {
                 </div>
                 {lyricsOpen && (
                   <div className={styles.lyricsPanel}>
-                    {lyricsLoading && <div className={styles.lyricsStatus}>LOADING...</div>}
-                    {!lyricsLoading && lyrics?.instrumental && <div className={styles.lyricsStatus}>♪ Instrumental</div>}
-                    {!lyricsLoading && lyrics && !lyrics.plain && !lyrics.instrumental && (
-                      <div className={styles.lyricsStatus}>Lyrics not found.</div>
-                    )}
-                    {lyrics?.plain && (
-                      <div className={styles.lyricsScroll}>
-                        <div className={styles.lyricsPlain}>{lyrics.plain}</div>
-                      </div>
-                    )}
+                    <LyricsContent lyrics={lyrics} loading={lyricsLoading} />
                   </div>
                 )}
               </Card>
