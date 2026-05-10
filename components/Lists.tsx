@@ -325,7 +325,7 @@ export default function Lists() {
                 const primaryRaw = discoPlaycounts[entryKey(discoArtist, group.primary.name)];
                 const aggregatedCount = primaryRaw === undefined
                   ? null
-                  : group.variants.reduce((sum, v) => sum + (discoPlaycounts[entryKey(discoArtist, v.name)] ?? 0), primaryRaw);
+                  : group.variants.reduce((sum, v) => sum + (discoPlaycounts[entryKey(discoArtist, v.name)] ?? 0), primaryRaw ?? 0);
                 const isGroupSelected = group.variants.some(
                   (v) => tracklistAlbum?.artist === discoArtist && tracklistAlbum?.name === v.name
                 ) || (tracklistAlbum?.artist === discoArtist && tracklistAlbum?.name === group.primary.name);
