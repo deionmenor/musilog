@@ -54,7 +54,9 @@ function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, ye
   return (
     <div className={rowClass}>
       <span className={styles.label}>{label}</span>
-      <span className={styles.check}>{!isResolved ? '·' : scrobbled ? '✓' : '✗'}</span>
+      <span className={`${styles.check} ${!isResolved ? '' : scrobbled ? styles.checkYes : styles.checkNo}`}>
+        {!isResolved ? '·' : scrobbled ? '✓' : '✗'}
+      </span>
       {hasImage && (
         <span className={styles.thumb}>
           {imageUrl ? <img src={imageUrl} alt="" className={styles.thumbImg} /> : null}

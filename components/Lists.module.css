@@ -136,6 +136,14 @@
   color: var(--theme-text);
 }
 
+.checkYes {
+  color: var(--theme-green);
+}
+
+.checkNo {
+  color: var(--theme-red);
+}
+
 .album {
   overflow: hidden;
   text-overflow: ellipsis;
