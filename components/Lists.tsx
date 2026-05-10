@@ -22,11 +22,15 @@ function entryKey(artist: string, album: string) {
   return `${artist}::${album}`;
 }
 
+const EDITION_WORDS = /remaster(ed)?|deluxe|expanded|special|anniversary|bonus|live|extended|vol\.?\s*\d+|edition|version|mono|stereo|super/i;
+
 function normalizeTitle(name: string): string {
   return name
     .toLowerCase()
-    .replace(/\s*[\(\[].*?[\)\]]\s*/g, ' ')
-    .replace(/\b(remaster(ed)?|deluxe|expanded|special|anniversary|bonus|live|extended|vol\.?\s*\d+|edition|version)\b/g, '')
+    // Only strip parentheticals that contain edition-type words (e.g. "(Deluxe Edition)")
+    // Preserve descriptive parentheticals like "(Blue Album)" or "(From the Basement)"
+    .replace(/\s*[\(\[][^\)\]]*[\)\]]\s*/g, (match) => EDITION_WORDS.test(match) ? ' ' : match)
+    .replace(new RegExp(`\\b(${EDITION_WORDS.source})\\b`, 'gi'), '')
     .replace(/[^a-z0-9]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
