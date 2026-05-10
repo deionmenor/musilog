@@ -153,15 +153,6 @@ function TrackYtButton({ artist, track, onPlay }: { artist: string; track: strin
   );
 }
 
-interface SyncedLine { time: number; text: string; }
-
-function parseSyncedLyrics(raw: string): SyncedLine[] {
-  return raw.split('\n').flatMap((line) => {
-    const m = line.match(/^\[(\d+):(\d+\.\d+)\](.*)/);
-    if (!m) return [];
-    return [{ time: parseInt(m[1]) * 60 + parseFloat(m[2]), text: m[3].trim() }];
-  });
-}
 
 interface AlbumMeta {
   artUrl: string | null;
@@ -243,10 +234,8 @@ export default function Home() {
   const ytPlayerActionsRef = React.useRef<YoutubePlayerActions | null>(null);
   const ytVideoCacheRef = React.useRef<Record<string, string>>({});
   const [lyricsOpen, setLyricsOpen] = React.useState(false);
-  const [lyrics, setLyrics] = React.useState<{ plain: string | null; synced: SyncedLine[] | null; instrumental: boolean } | null>(null);
+  const [lyrics, setLyrics] = React.useState<{ plain: string | null; instrumental: boolean } | null>(null);
   const [lyricsLoading, setLyricsLoading] = React.useState(false);
-  const [currentLyricIdx, setCurrentLyricIdx] = React.useState(-1);
-  const lyricsScrollRef = React.useRef<HTMLDivElement>(null);
   const lyricsOpenRef = React.useRef(false);
   const resultsRef = React.useRef<HTMLDivElement>(null);
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -294,7 +283,6 @@ export default function Home() {
       const data = await res.json();
       setLyrics({
         plain: data.plainLyrics ?? null,
-        synced: data.syncedLyrics ? parseSyncedLyrics(data.syncedLyrics) : null,
         instrumental: data.instrumental ?? false,
       });
     } finally {
@@ -305,7 +293,6 @@ export default function Home() {
   // Reset lyrics when track changes; re-fetch if panel is open
   React.useEffect(() => {
     setLyrics(null);
-    setCurrentLyricIdx(-1);
     if (lyricsOpenRef.current && ytEmbed) {
       const sep = ytEmbed.title.indexOf(' — ');
       if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
@@ -314,31 +301,6 @@ export default function Home() {
   }, [ytEmbed?.videoId]);
 
   React.useEffect(() => { lyricsOpenRef.current = lyricsOpen; }, [lyricsOpen]);
-
-  // Track current synced lyric position
-  React.useEffect(() => {
-    if (!lyricsOpen || !lyrics?.synced || !ytPlaying) return;
-    const id = setInterval(() => {
-      const t = ytPlayerActionsRef.current?.getCurrentTime() ?? 0;
-      const lines = lyrics.synced!;
-      let idx = -1;
-      for (let i = lines.length - 1; i >= 0; i--) {
-        if (t >= lines[i].time) { idx = i; break; }
-      }
-      setCurrentLyricIdx((prev) => {
-        if (prev === idx) return prev;
-        return idx;
-      });
-    }, 250);
-    return () => clearInterval(id);
-  }, [lyricsOpen, lyrics, ytPlaying]);
-
-  // Scroll active lyric line into view
-  React.useEffect(() => {
-    if (currentLyricIdx < 0 || !lyricsScrollRef.current) return;
-    const el = lyricsScrollRef.current.children[currentLyricIdx] as HTMLElement | undefined;
-    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [currentLyricIdx]);
 
   const handleAutoNext = React.useCallback(() => {
     if (!ytEmbed) return;
@@ -901,19 +863,10 @@ export default function Home() {
                   <div className={styles.lyricsPanel}>
                     {lyricsLoading && <div className={styles.lyricsStatus}>LOADING...</div>}
                     {!lyricsLoading && lyrics?.instrumental && <div className={styles.lyricsStatus}>♪ Instrumental</div>}
-                    {!lyricsLoading && lyrics && !lyrics.plain && !lyrics.synced && !lyrics.instrumental && (
+                    {!lyricsLoading && lyrics && !lyrics.plain && !lyrics.instrumental && (
                       <div className={styles.lyricsStatus}>Lyrics not found.</div>
                     )}
-                    {lyrics?.synced && (
-                      <div className={styles.lyricsScroll} ref={lyricsScrollRef}>
-                        {lyrics.synced.map((line, i) => (
-                          <div key={i} className={[styles.lyricLine, i === currentLyricIdx ? styles.lyricLineCurrent : ''].join(' ')}>
-                            {line.text || <span className={styles.lyricBlank}>·</span>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {!lyrics?.synced && lyrics?.plain && (
+                    {lyrics?.plain && (
                       <div className={styles.lyricsScroll}>
                         <div className={styles.lyricsPlain}>{lyrics.plain}</div>
                       </div>

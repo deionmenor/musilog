@@ -154,20 +154,6 @@
   display: none;
 }
 
-.lyricLine {
-  padding: calc(var(--theme-line-height-base) * 0.1rem) 0;
-  opacity: 0.3;
-  transition: opacity 0.25s ease;
-  line-height: var(--theme-line-height-base);
-}
-
-.lyricLineCurrent {
-  opacity: 1;
-}
-
-.lyricBlank {
-  opacity: 0.3;
-}
 
 .lyricsPlain {
   white-space: pre-line;
