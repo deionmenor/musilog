@@ -428,32 +428,29 @@ export default function Lists() {
             <div className={styles.actions}>
               {mode === 'grammy' && (
                 <ActionButton
-                  onClick={handleGrammyCheck}
-                  disabled={isLoading || !username.trim()}
+                  onClick={() => { if (!isLoading && username.trim()) handleGrammyCheck(); }}
                 >
                   {grammyLoading ? `${grammyResolved}/${GRAMMY_LIST.length}` : 'CHECK'}
                 </ActionButton>
               )}
               {mode === 'discography' && !discoArtist && (
                 <ActionButton
-                  onClick={handleArtistSearch}
-                  disabled={isLoading || !artistQuery.trim()}
+                  onClick={() => { if (!isLoading && artistQuery.trim()) handleArtistSearch(); }}
                 >
                   {discoSearching ? '...' : 'SEARCH'}
                 </ActionButton>
               )}
               {mode === 'discography' && (discoArtist || discoSearchResults) && (
                 <ActionButton
-                  onClick={() => { resetDisco(); setArtistQuery(''); }}
-                  disabled={isLoading}
+                  onClick={() => { if (!isLoading) { resetDisco(); setArtistQuery(''); } }}
                 >
                   BACK
                 </ActionButton>
               )}
               {mode === 'discography' && discoArtist && (
                 <ActionButton
-                  disabled={isLoading || !username.trim()}
                   onClick={() => {
+                    if (isLoading || !username.trim()) return;
                     setDiscoPlaycounts({});
                     const user = username.trim();
                     setDiscoLoading(true);
