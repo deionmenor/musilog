@@ -13,99 +13,185 @@ interface AlbumEntry {
   album: string;
 }
 
-const LIST: AlbumEntry[] = grammyData;
+const GRAMMY_LIST: AlbumEntry[] = grammyData;
 
-function entryKey(e: AlbumEntry) {
-  return `${e.artist}::${e.album}`;
+function entryKey(artist: string, album: string) {
+  return `${artist}::${album}`;
+}
+
+async function fetchPlaycount(artist: string, album: string, username: string): Promise<number> {
+  try {
+    const res = await fetch(
+      `/api/album-userplaycount?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}&username=${encodeURIComponent(username)}`
+    );
+    const data = await res.json();
+    return parseInt(data.userplaycount, 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+interface AlbumRowProps {
+  label: string;
+  album: string;
+  artist: string;
+  count: number | null;
+}
+
+function AlbumRow({ label, album, artist, count }: AlbumRowProps) {
+  const isResolved = count != null;
+  const scrobbled = isResolved && count > 0;
+  return (
+    <div className={`${styles.row} ${scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : ''}`}>
+      <span className={styles.year}>{label}</span>
+      <span className={styles.check}>{!isResolved ? '·' : scrobbled ? '✓' : '✗'}</span>
+      <span className={styles.album}>{album}</span>
+      <span className={styles.artist}>{artist}</span>
+      {scrobbled && <span className={styles.count}>{count.toLocaleString()}</span>}
+    </div>
+  );
 }
 
 export default function Lists() {
   const [username, setUsername] = React.useState('');
-  const [playcounts, setPlaycounts] = React.useState<Record<string, number | null>>({});
-  const [loading, setLoading] = React.useState(false);
+
+  // Grammy state
+  const [grammyPlaycounts, setGrammyPlaycounts] = React.useState<Record<string, number | null>>({});
+  const [grammyLoading, setGrammyLoading] = React.useState(false);
+
+  // Discography state
+  const [artistQuery, setArtistQuery] = React.useState('');
+  const [discoArtist, setDiscoArtist] = React.useState('');
+  const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string }[]>([]);
+  const [discoPlaycounts, setDiscoPlaycounts] = React.useState<Record<string, number | null>>({});
+  const [discoLoading, setDiscoLoading] = React.useState(false);
+  const [discoError, setDiscoError] = React.useState('');
 
   React.useEffect(() => {
     const saved = localStorage.getItem('lastfm-username');
     if (saved) setUsername(saved);
   }, []);
 
-  const handleCheck = async () => {
+  const handleGrammyCheck = async () => {
     if (!username.trim()) return;
-    setLoading(true);
-    setPlaycounts({});
+    setGrammyLoading(true);
+    setGrammyPlaycounts({});
     const user = username.trim();
-
     await Promise.all(
-      LIST.map(async (entry) => {
-        try {
-          const res = await fetch(
-            `/api/album-userplaycount?artist=${encodeURIComponent(entry.artist)}&album=${encodeURIComponent(entry.album)}&username=${encodeURIComponent(user)}`
-          );
-          const data = await res.json();
-          const count = parseInt(data.userplaycount, 10) || 0;
-          setPlaycounts((prev) => ({ ...prev, [entryKey(entry)]: count }));
-        } catch {
-          setPlaycounts((prev) => ({ ...prev, [entryKey(entry)]: 0 }));
-        }
+      GRAMMY_LIST.map(async (entry) => {
+        const count = await fetchPlaycount(entry.artist, entry.album, user);
+        setGrammyPlaycounts((prev) => ({ ...prev, [entryKey(entry.artist, entry.album)]: count }));
       })
     );
-
-    setLoading(false);
+    setGrammyLoading(false);
   };
 
-  const checked = Object.values(playcounts).filter((v) => (v ?? 0) > 0).length;
-  const resolved = Object.keys(playcounts).length;
-  const hasResults = resolved > 0;
+  const handleDiscoCheck = async () => {
+    if (!artistQuery.trim() || !username.trim()) return;
+    setDiscoLoading(true);
+    setDiscoError('');
+    setDiscoAlbums([]);
+    setDiscoPlaycounts({});
+    setDiscoArtist('');
+
+    const res = await fetch(`/api/artist-discography?artist=${encodeURIComponent(artistQuery.trim())}`);
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      setDiscoError(data.error || 'Failed to fetch discography.');
+      setDiscoLoading(false);
+      return;
+    }
+
+    const albums: { name: string }[] = data.albums;
+    setDiscoArtist(data.artist);
+    setDiscoAlbums(albums);
+
+    const user = username.trim();
+    await Promise.all(
+      albums.map(async (album) => {
+        const count = await fetchPlaycount(data.artist, album.name, user);
+        setDiscoPlaycounts((prev) => ({ ...prev, [entryKey(data.artist, album.name)]: count }));
+      })
+    );
+    setDiscoLoading(false);
+  };
+
+  const grammyChecked = Object.values(grammyPlaycounts).filter((v) => (v ?? 0) > 0).length;
+  const grammyResolved = Object.keys(grammyPlaycounts).length;
+
+  const discoChecked = Object.values(discoPlaycounts).filter((v) => (v ?? 0) > 0).length;
+  const discoResolved = Object.keys(discoPlaycounts).length;
 
   return (
     <div className={styles.container}>
+      <div className={styles.usernameRow}>
+        <Input
+          label="USERNAME"
+          prefix="@"
+          placeholder="e.g. rj"
+          value={username}
+          onChange={(e) => {
+            setUsername(e.target.value);
+            localStorage.setItem('lastfm-username', e.target.value);
+          }}
+          isBlink
+        />
+      </div>
+
       <Card title="GRAMMY — ALBUM OF THE YEAR">
         <div className={styles.header}>
-          <Input
-            label="USERNAME"
-            prefix="@"
-            placeholder="e.g. rj"
-            value={username}
-            onChange={(e) => {
-              setUsername(e.target.value);
-              localStorage.setItem('lastfm-username', e.target.value);
-            }}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleCheck(); }}
-            isBlink
-          />
-          <ActionButton onClick={handleCheck} disabled={loading || !username.trim()}>
-            {loading ? `${resolved}/${LIST.length}` : 'CHECK'}
+          <ActionButton onClick={handleGrammyCheck} disabled={grammyLoading || !username.trim()}>
+            {grammyLoading ? `${grammyResolved}/${GRAMMY_LIST.length}` : 'CHECK'}
           </ActionButton>
-          {hasResults && (
-            <span className={styles.score}>{checked}/{LIST.length} SCROBBLED</span>
+          {grammyResolved > 0 && (
+            <span className={styles.score}>{grammyChecked}/{GRAMMY_LIST.length} SCROBBLED</span>
           )}
         </div>
-
         <div className={styles.list}>
-          {LIST.map((entry) => {
-            const k = entryKey(entry);
-            const count = playcounts[k];
-            const isResolved = count != null;
-            const scrobbled = isResolved && count > 0;
-
-            return (
-              <div
-                key={k}
-                className={`${styles.row} ${scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : ''}`}
-              >
-                <span className={styles.year}>{entry.year}</span>
-                <span className={styles.check}>
-                  {!isResolved ? '·' : scrobbled ? '✓' : '✗'}
-                </span>
-                <span className={styles.album}>{entry.album}</span>
-                <span className={styles.artist}>{entry.artist}</span>
-                {scrobbled && (
-                  <span className={styles.count}>{count.toLocaleString()}</span>
-                )}
-              </div>
-            );
-          })}
+          {GRAMMY_LIST.map((entry) => (
+            <AlbumRow
+              key={entryKey(entry.artist, entry.album)}
+              label={String(entry.year)}
+              album={entry.album}
+              artist={entry.artist}
+              count={grammyPlaycounts[entryKey(entry.artist, entry.album)] ?? null}
+            />
+          ))}
         </div>
+      </Card>
+
+      <Card title="ARTIST DISCOGRAPHY">
+        <div className={styles.header}>
+          <Input
+            label="ARTIST"
+            placeholder="e.g. Radiohead"
+            value={artistQuery}
+            onChange={(e) => setArtistQuery(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleDiscoCheck(); }}
+            isBlink
+          />
+          <ActionButton onClick={handleDiscoCheck} disabled={discoLoading || !artistQuery.trim() || !username.trim()}>
+            {discoLoading ? `${discoResolved}/${discoAlbums.length || '?'}` : 'CHECK'}
+          </ActionButton>
+          {discoResolved > 0 && (
+            <span className={styles.score}>{discoChecked}/{discoAlbums.length} SCROBBLED</span>
+          )}
+        </div>
+        {discoError && <div className={styles.error}>{discoError}</div>}
+        {discoAlbums.length > 0 && (
+          <div className={styles.list}>
+            {discoAlbums.map((album, i) => (
+              <AlbumRow
+                key={entryKey(discoArtist, album.name)}
+                label={String(i + 1)}
+                album={album.name}
+                artist={discoArtist}
+                count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
+              />
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

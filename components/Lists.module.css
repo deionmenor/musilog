@@ -6,6 +6,16 @@
   gap: calc(var(--theme-line-height-base) * 0.5rem);
 }
 
+.usernameRow {
+  width: 100%;
+}
+
+.error {
+  color: var(--theme-red);
+  font-size: var(--font-size);
+  margin-bottom: calc(var(--theme-line-height-base) * 0.25rem);
+}
+
 .header {
   display: flex;
   align-items: flex-end;
@@ -23,6 +33,8 @@
 .list {
   display: flex;
   flex-direction: column;
+  max-height: 480px;
+  overflow-y: auto;
 }
 
 .row {
