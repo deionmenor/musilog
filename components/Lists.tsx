@@ -40,15 +40,16 @@ interface AlbumRowProps {
   showArtist?: boolean;
   imageUrl?: string | null;
   year?: string | null;
+  fadeListened?: boolean;
 }
 
-function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year }: AlbumRowProps) {
+function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year, fadeListened }: AlbumRowProps) {
   const isResolved = count != null;
   const scrobbled = isResolved && count > 0;
   const hasImage = imageUrl != null;
   const rowClass = [
     hasImage ? styles.rowWithImage : styles.row,
-    scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : '',
+    fadeListened && scrobbled ? styles.faded : '',
   ].join(' ');
   return (
     <div className={rowClass}>
@@ -82,6 +83,7 @@ export default function Lists() {
   const [discoArtist, setDiscoArtist] = React.useState('');
   const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string; imageUrl: string | null; year: string | null; releaseType: string }[]>([]);
   const [discoTypeFilter, setDiscoTypeFilter] = React.useState<'all' | 'album' | 'ep-single'>('all');
+  const [fadeListened, setFadeListened] = React.useState(false);
   const [discoPlaycounts, setDiscoPlaycounts] = React.useState<Record<string, number | null>>({});
   const [discoLoading, setDiscoLoading] = React.useState(false);
   const [discoError, setDiscoError] = React.useState('');
@@ -164,6 +166,7 @@ export default function Lists() {
                 album={entry.album}
                 artist={entry.artist}
                 count={grammyPlaycounts[entryKey(entry.artist, entry.album)] ?? null}
+                fadeListened={fadeListened}
               />
             ))}
             {mode === 'discography' && discoAlbums.length === 0 && !discoLoading && (
@@ -192,6 +195,7 @@ export default function Lists() {
                     imageUrl={album.imageUrl}
                     year={album.year}
                     count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
+                    fadeListened={fadeListened}
                   />
                 ));
 
@@ -271,8 +275,11 @@ export default function Lists() {
                   ? (mode === 'grammy' ? `${grammyResolved}/${GRAMMY_LIST.length}` : `${discoResolved}/${discoAlbums.length || '?'}`)
                   : 'CHECK'}
               </ActionButton>
-              {score && <span className={styles.score}>{score}</span>}
+              <ActionButton isSelected={fadeListened} onClick={() => setFadeListened((v) => !v)}>
+                FADE LISTENED
+              </ActionButton>
             </div>
+            {score && <span className={styles.score}>{score}</span>}
           </div>
         </Card>
       </div>
