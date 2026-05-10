@@ -35,6 +35,10 @@ async function resolveMBArtistId(lastfmMbid: string | null, artistName: string):
 }
 
 // Paginate through all release groups for an artist
+function normalizeKey(s: string): string {
+  return s.toLowerCase().replace(/[\u2018\u2019\u201A\u201B\u2032\u2035`]/g, "'").replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"').trim();
+}
+
 async function fetchAllReleaseGroups(mbid: string): Promise<Map<string, { year: string | null; releaseType: ReleaseType }>> {
   const map = new Map<string, { year: string | null; releaseType: ReleaseType }>();
   const limit = 100;
@@ -52,7 +56,7 @@ async function fetchAllReleaseGroups(mbid: string): Promise<Map<string, { year: 
 
     const priority: Record<ReleaseType, number> = { album: 3, ep: 2, single: 1, other: 0 };
     for (const rg of groups) {
-      const key = rg.title?.toLowerCase().trim();
+      const key = rg.title ? normalizeKey(rg.title) : null;
       if (!key) continue;
       const releaseType = classifyType(rg['primary-type'] ?? null, rg['secondary-types'] ?? []);
       const existing = map.get(key);
@@ -117,7 +121,7 @@ export async function GET(request: NextRequest) {
     albums: raw
       .filter((a) => a.name && a.name !== '(null)')
       .map((a) => {
-        const mb = mbReleaseMap.get(a.name.toLowerCase().trim());
+        const mb = mbReleaseMap.get(normalizeKey(a.name));
         return {
           name: a.name,
           mbid: a.mbid || null,
