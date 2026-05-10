@@ -175,9 +175,11 @@ export default function Lists() {
                 discoTypeFilter === 'album' ? a.releaseType === 'album' :
                 a.releaseType === 'ep' || a.releaseType === 'single'
               );
-              const mainAlbums = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'album') : albums;
-              const epSingles = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'ep' || a.releaseType === 'single') : [];
-              const others = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'other') : [];
+              const byYear = (a: typeof albums[0], b: typeof albums[0]) =>
+                (a.year ?? '9999').localeCompare(b.year ?? '9999');
+              const mainAlbums = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'album').sort(byYear) : albums.sort(byYear);
+              const epSingles = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'ep' || a.releaseType === 'single').sort(byYear) : [];
+              const others = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'other').sort(byYear) : [];
 
               const renderRows = (subset: typeof albums, offset = 0) =>
                 subset.map((album, i) => (
