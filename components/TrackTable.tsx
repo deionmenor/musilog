@@ -63,7 +63,7 @@ const TrackTable: React.FC<TrackTableProps> = ({ tracks, onPlay, showPlays = tru
             <td>SONG</td>
             <td>ARTIST</td>
             {showPlays && <td className={tableStyles.alignRight}>PLAYS</td>}
-            <td />
+            <td data-no-export />
           </tr>
         </thead>
         <tbody>
@@ -77,7 +77,7 @@ const TrackTable: React.FC<TrackTableProps> = ({ tracks, onPlay, showPlays = tru
               <td>{formatName(t.name)}</td>
               <td>{t.artist}</td>
               {showPlays && <td className={tableStyles.alignRight}>{t.playcount.toLocaleString()}</td>}
-              <td className={styles.playCol}>
+              <td className={styles.playCol} data-no-export>
                 <PlayButton
                   artist={t.artist}
                   track={t.name}

@@ -14,6 +14,7 @@ import AreaChart from '@components/AreaChart';
 import YoutubePlayer, { YoutubePlayerActions } from '@components/YoutubePlayer';
 import DateRangeModal from '@components/DateRangeModal';
 import RankMode from '@components/RankMode';
+import Tooltip from '@components/Tooltip';
 import ASCII_BANNER from '@/lib/ascii';
 import { formatName } from '@/lib/formatName';
 import styles from './page.module.css';
@@ -155,7 +156,7 @@ function TrackYtButton({ artist, track, onPlay }: { artist: string; track: strin
 interface AlbumMeta {
   artUrl: string | null;
   releaseDate: string | null;
-  tracks: { rank: number; name: string; duration: number }[];
+  tracks: { rank: number; name: string; duration: number; playcount: number }[];
   totalDuration: number;
   listeners: number;
   playcount: number;
@@ -556,6 +557,9 @@ export default function Home() {
         row.style.opacity = '1';
       });
 
+      const noExportEls = resultsRef.current.querySelectorAll<HTMLElement>('[data-no-export]');
+      noExportEls.forEach((el) => { el.style.display = 'none'; });
+
       const html2canvas = (await import('html2canvas')).default;
       const bodyStyle = getComputedStyle(document.body);
       const bgColor = bodyStyle.getPropertyValue('--theme-background').trim() || '#ffffff';
@@ -571,6 +575,8 @@ export default function Home() {
         useCORS: true,
         logging: false,
       });
+
+      noExportEls.forEach((el) => { el.style.display = ''; });
 
       const scale = 2;
       const pad = 24 * scale;
@@ -1049,26 +1055,37 @@ export default function Home() {
                         <button className={styles.tracklistToggle} onClick={() => setTracklistOpen((o) => !o)}>
                           {tracklistOpen ? '▼' : '▶'} TRACKLIST
                         </button>
-                        {tracklistOpen && (
-                          <div className={styles.sidebarTracks}>
-                            {activeMeta.tracks.map((t, tIdx) => (
-                              <div key={t.rank} className={styles.sidebarTrack}>
-                                <span className={styles.sidebarTrackNum}>{t.rank}.</span>
-                                <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
-                                {t.duration > 0 && (
-                                  <span className={styles.sidebarTrackDur}>
-                                    {Math.floor(t.duration / 60)}:{String(t.duration % 60).padStart(2, '0')}
-                                  </span>
-                                )}
-                                <TrackYtButton
-                                  artist={activeAlbum.artist}
-                                  track={t.name}
-                                  onPlay={(videoId) => setYtEmbed({ videoId, title: `${activeAlbum.artist} — ${t.name}`, source: 'album', albumIdx: idx, trackIdx: tIdx })}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {tracklistOpen && (() => {
+                          const withPlays = activeMeta.tracks.filter((t) => t.playcount > 0);
+                          const hotSet = new Set(
+                            [...withPlays].sort((a, b) => b.playcount - a.playcount).slice(0, 3).map((t) => t.rank)
+                          );
+                          return (
+                            <div className={styles.sidebarTracks}>
+                              {activeMeta.tracks.map((t, tIdx) => (
+                                <div key={t.rank} className={styles.sidebarTrack}>
+                                  <span className={styles.sidebarTrackNum}>{t.rank}.</span>
+                                  <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
+                                  {hotSet.has(t.rank) && (
+                                    <Tooltip content={`${t.playcount.toLocaleString()} plays`}>
+                                      <span className={styles.hotDot} />
+                                    </Tooltip>
+                                  )}
+                                  {t.duration > 0 && (
+                                    <span className={styles.sidebarTrackDur}>
+                                      {Math.floor(t.duration / 60)}:{String(t.duration % 60).padStart(2, '0')}
+                                    </span>
+                                  )}
+                                  <TrackYtButton
+                                    artist={activeAlbum.artist}
+                                    track={t.name}
+                                    onPlay={(videoId) => setYtEmbed({ videoId, title: `${activeAlbum.artist} — ${t.name}`, source: 'album', albumIdx: idx, trackIdx: tIdx })}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                   </>

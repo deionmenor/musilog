@@ -299,6 +299,20 @@
   flex-shrink: 0;
 }
 
+.hotDot {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--theme-red, #e53e3e);
+  background-clip: padding-box;
+  border: 5px solid transparent;
+  box-sizing: content-box;
+  align-self: center;
+  opacity: 0.85;
+  cursor: default;
+}
+
 .ytBtn {
   flex-shrink: 0;
   background: none;
