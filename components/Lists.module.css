@@ -177,8 +177,7 @@
 }
 
 .rowSelected {
-  outline: 1px solid var(--theme-text);
-  outline-offset: -1px;
+  background: var(--theme-focused-foreground);
 }
 
 .ytEmbedWrapper {
