@@ -13,6 +13,7 @@ import TrackTable from '@components/TrackTable';
 import AreaChart from '@components/AreaChart';
 import YoutubePlayer, { YoutubePlayerActions } from '@components/YoutubePlayer';
 import DateRangeModal from '@components/DateRangeModal';
+import RankMode from '@components/RankMode';
 import Tooltip from '@components/Tooltip';
 import ASCII_BANNER from '@/lib/ascii';
 import { formatName } from '@/lib/formatName';
@@ -46,7 +47,7 @@ function LineLoader({ mode }: { mode: FetchMode }) {
 }
 
 type Period = 'overall' | '7day' | '1month' | '3month' | '6month' | '12month' | 'this_month' | 'this_year' | 'custom';
-type Theme = 'light' | 'dracula' | 'gruvbox' | 'github' | 'monokai' | 'tokyo' | 'catppuccin';
+type Theme = 'light' | 'dracula' | 'gruvbox' | 'github' | 'monokai' | 'tokyo' | 'catppuccin' | 'onedark';
 
 const THEMES: { id: Theme; label: string }[] = [
   { id: 'light', label: 'LIGHT' },
@@ -56,6 +57,7 @@ const THEMES: { id: Theme; label: string }[] = [
   { id: 'monokai', label: 'MONOKAI' },
   { id: 'tokyo', label: 'TOKYO NIGHT' },
   { id: 'catppuccin', label: 'CATPPUCCIN' },
+  { id: 'onedark', label: 'ONE DARK' },
 ];
 
 const MONTH_NAMES = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
@@ -176,7 +178,13 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+const APP_MODES = [
+  { id: 'charts', label: 'CHARTS' },
+  { id: 'rank', label: 'RANK MODE' },
+];
+
 export default function Home() {
+  const [appMode, setAppMode] = React.useState<'charts' | 'rank'>('charts');
   const [theme, setTheme] = React.useState<Theme>('github');
   const [username, setUsername] = React.useState('');
   const [period, setPeriod] = React.useState<Period>('overall');
@@ -228,7 +236,7 @@ export default function Home() {
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
-    const themes: Theme[] = ['light', 'dracula', 'gruvbox', 'github', 'monokai', 'tokyo', 'catppuccin'];
+    const themes: Theme[] = ['light', 'dracula', 'gruvbox', 'github', 'monokai', 'tokyo', 'catppuccin', 'onedark'];
     themes.forEach((t) => document.body.classList.remove(`theme-${t}`));
     document.body.classList.add(`theme-${theme}`);
   }, [theme]);
@@ -691,9 +699,12 @@ export default function Home() {
       ] : []}
       rightItems={[{ hotkey: '♥', body: 'SUPPORT', onClick: () => window.open('https://deionmenor.com', '_blank') }]}
     >
+      <ThemeDropdown label={appMode === 'rank' ? 'RANK MODE' : 'CHARTS'} items={APP_MODES} currentId={appMode} onSelect={(id) => setAppMode(id as 'charts' | 'rank')} />
       <ThemeDropdown hotkey="◑" label="THEME" items={THEMES} currentId={theme} onSelect={(id) => setTheme(id as Theme)} />
     </ActionBar>
     <main className={styles.main}>
+      {appMode === 'rank' && <RankMode />}
+      {appMode === 'charts' && <>
       <div className={styles.banner}>
         <Card title="MUSILOG.FM">
           <div className={styles.bannerInner}>
@@ -1095,6 +1106,7 @@ export default function Home() {
         onClose={handleModalClose}
         onConfirm={handleModalConfirm}
       />
+      </>}
     </main>
     </div>
   );
