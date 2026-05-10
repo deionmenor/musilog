@@ -50,12 +50,16 @@ async function fetchAllReleaseGroups(mbid: string): Promise<Map<string, { year: 
     const groups: any[] = data['release-groups'] ?? [];
     total = data['release-group-count'] ?? 0;
 
+    const priority: Record<ReleaseType, number> = { album: 3, ep: 2, single: 1, other: 0 };
     for (const rg of groups) {
       const key = rg.title?.toLowerCase().trim();
       if (!key) continue;
+      const releaseType = classifyType(rg['primary-type'] ?? null, rg['secondary-types'] ?? []);
+      const existing = map.get(key);
+      if (existing && priority[existing.releaseType] >= priority[releaseType]) continue;
       map.set(key, {
         year: rg['first-release-date']?.slice(0, 4) ?? null,
-        releaseType: classifyType(rg['primary-type'] ?? null, rg['secondary-types'] ?? []),
+        releaseType,
       });
     }
 
