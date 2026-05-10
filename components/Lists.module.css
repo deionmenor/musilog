@@ -1,0 +1,87 @@
+.container {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--theme-line-height-base) * 0.5rem);
+}
+
+.header {
+  display: flex;
+  align-items: flex-end;
+  gap: 1ch;
+  margin-bottom: calc(var(--theme-line-height-base) * 0.5rem);
+}
+
+.score {
+  margin-left: auto;
+  opacity: 0.5;
+  font-size: var(--font-size);
+  white-space: nowrap;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4ch 2ch 1fr auto auto;
+  gap: 1ch;
+  align-items: baseline;
+  padding: calc(var(--theme-line-height-base) * 0.15rem) 0;
+  border-bottom: 1px solid var(--theme-focused-foreground);
+  opacity: 0.45;
+  transition: opacity 0.1s;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.scrobbled {
+  opacity: 1;
+}
+
+.unscrobbled {
+  opacity: 0.3;
+}
+
+.year {
+  opacity: 0.5;
+  font-size: var(--font-size);
+}
+
+.check {
+  color: var(--theme-text);
+}
+
+.scrobbled .check {
+  color: var(--theme-green);
+}
+
+.unscrobbled .check {
+  color: var(--theme-red);
+}
+
+.album {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist {
+  opacity: 0.55;
+  font-size: var(--font-size);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.count {
+  opacity: 0.5;
+  font-size: var(--font-size);
+  white-space: nowrap;
+  text-align: right;
+}
