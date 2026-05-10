@@ -36,7 +36,14 @@ async function resolveMBArtistId(lastfmMbid: string | null, artistName: string):
 
 // Paginate through all release groups for an artist
 function normalizeKey(s: string): string {
-  return s.toLowerCase().replace(/[\u2018\u2019\u201A\u201B\u2032\u2035`]/g, "'").replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"').trim();
+  return s
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035`]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')
+    .replace(/\s*[\(\[].*?[\)\]]\s*/g, ' ')
+    .replace(/\b(remaster(ed)?|deluxe|expanded|special|anniversary|bonus|live|extended|vol\.?\s*\d+|edition|version|mono|stereo|super)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 async function fetchAllReleaseGroups(mbid: string): Promise<Map<string, { year: string | null; releaseType: ReleaseType }>> {
