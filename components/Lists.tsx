@@ -39,26 +39,29 @@ interface AlbumRowProps {
   count: number | null;
   showArtist?: boolean;
   imageUrl?: string | null;
+  year?: string | null;
 }
 
-function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl }: AlbumRowProps) {
+function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year }: AlbumRowProps) {
   const isResolved = count != null;
   const scrobbled = isResolved && count > 0;
+  const hasImage = imageUrl != null;
   const rowClass = [
-    imageUrl != null ? styles.rowWithImage : styles.row,
+    hasImage ? styles.rowWithImage : styles.row,
     scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : '',
   ].join(' ');
   return (
     <div className={rowClass}>
       <span className={styles.label}>{label}</span>
       <span className={styles.check}>{!isResolved ? '·' : scrobbled ? '✓' : '✗'}</span>
-      {imageUrl != null && (
+      {hasImage && (
         <span className={styles.thumb}>
           {imageUrl ? <img src={imageUrl} alt="" className={styles.thumbImg} /> : null}
         </span>
       )}
       <span className={styles.album}>{album}</span>
       {showArtist && <span className={styles.artist}>{artist}</span>}
+      {year && <span className={styles.year}>{year}</span>}
       {scrobbled && <span className={styles.count}>{count.toLocaleString()}</span>}
     </div>
   );
@@ -77,7 +80,8 @@ export default function Lists() {
   // Discography state
   const [artistQuery, setArtistQuery] = React.useState('');
   const [discoArtist, setDiscoArtist] = React.useState('');
-  const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string; imageUrl: string | null }[]>([]);
+  const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string; imageUrl: string | null; year: string | null; releaseType: string }[]>([]);
+  const [discoTypeFilter, setDiscoTypeFilter] = React.useState<'all' | 'album' | 'ep-single'>('all');
   const [discoPlaycounts, setDiscoPlaycounts] = React.useState<Record<string, number | null>>({});
   const [discoLoading, setDiscoLoading] = React.useState(false);
   const [discoError, setDiscoError] = React.useState('');
@@ -118,7 +122,7 @@ export default function Lists() {
       return;
     }
 
-    const albums: { name: string; imageUrl: string | null }[] = data.albums;
+    const albums: { name: string; imageUrl: string | null; year: string | null; releaseType: string }[] = data.albums;
     setDiscoArtist(data.artist);
     setDiscoAlbums(albums);
 
@@ -165,17 +169,43 @@ export default function Lists() {
             {mode === 'discography' && discoAlbums.length === 0 && !discoLoading && (
               <div className={styles.empty}>Search an artist to see their discography.</div>
             )}
-            {mode === 'discography' && discoAlbums.map((album, i) => (
-              <AlbumRow
-                key={entryKey(discoArtist, album.name)}
-                label={String(i + 1)}
-                album={album.name}
-                artist={discoArtist}
-                showArtist={false}
-                imageUrl={album.imageUrl}
-                count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
-              />
-            ))}
+            {mode === 'discography' && (() => {
+              const albums = discoAlbums.filter((a) =>
+                discoTypeFilter === 'all' ? true :
+                discoTypeFilter === 'album' ? a.releaseType === 'album' :
+                a.releaseType === 'ep' || a.releaseType === 'single'
+              );
+              const mainAlbums = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'album') : albums;
+              const epSingles = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'ep' || a.releaseType === 'single') : [];
+              const others = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'other') : [];
+
+              const renderRows = (subset: typeof albums, offset = 0) =>
+                subset.map((album, i) => (
+                  <AlbumRow
+                    key={entryKey(discoArtist, album.name)}
+                    label={String(i + 1 + offset)}
+                    album={album.name}
+                    artist={discoArtist}
+                    showArtist={false}
+                    imageUrl={album.imageUrl}
+                    year={album.year}
+                    count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
+                  />
+                ));
+
+              if (discoTypeFilter !== 'all') return renderRows(albums);
+
+              return (
+                <>
+                  {mainAlbums.length > 0 && <div className={styles.sectionHeader}>ALBUMS</div>}
+                  {renderRows(mainAlbums)}
+                  {epSingles.length > 0 && <div className={styles.sectionHeader}>EPS & SINGLES</div>}
+                  {renderRows(epSingles)}
+                  {others.length > 0 && <div className={styles.sectionHeader}>OTHER</div>}
+                  {renderRows(others)}
+                </>
+              );
+            })()}
           </div>
         </Card>
       </div>
@@ -206,14 +236,26 @@ export default function Lists() {
             </div>
 
             {mode === 'discography' && (
-              <Input
-                label="ARTIST"
-                placeholder="e.g. Radiohead"
-                value={artistQuery}
-                onChange={(e) => setArtistQuery(e.target.value)}
-                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleDiscoCheck(); }}
-                isBlink
-              />
+              <>
+                <Input
+                  label="ARTIST"
+                  placeholder="e.g. Radiohead"
+                  value={artistQuery}
+                  onChange={(e) => setArtistQuery(e.target.value)}
+                  onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleDiscoCheck(); }}
+                  isBlink
+                />
+                {discoAlbums.length > 0 && (
+                  <ButtonGroup
+                    isFull
+                    items={[
+                      { body: 'ALL', selected: discoTypeFilter === 'all', onClick: () => setDiscoTypeFilter('all') },
+                      { body: 'ALBUMS', selected: discoTypeFilter === 'album', onClick: () => setDiscoTypeFilter('album') },
+                      { body: 'EPS & SINGLES', selected: discoTypeFilter === 'ep-single', onClick: () => setDiscoTypeFilter('ep-single') },
+                    ]}
+                  />
+                )}
+              </>
             )}
 
             {discoError && <div className={styles.error}>{discoError}</div>}

@@ -79,13 +79,22 @@
 
 .rowWithImage {
   display: grid;
-  grid-template-columns: 4ch 2ch 2rem 1fr auto;
+  grid-template-columns: 4ch 2ch 2rem 1fr 4ch auto;
   gap: 1ch;
   align-items: center;
   padding: calc(var(--theme-line-height-base) * 0.1rem) 0;
   border-bottom: 1px solid var(--theme-focused-foreground);
   opacity: 0.45;
   transition: opacity 0.1s;
+}
+
+.sectionHeader {
+  font-size: calc(var(--font-size) * 0.8);
+  letter-spacing: 0.1em;
+  color: var(--theme-overlay);
+  padding: calc(var(--theme-line-height-base) * 0.4rem) 0 calc(var(--theme-line-height-base) * 0.15rem);
+  border-bottom: 1px solid var(--theme-border);
+  margin-bottom: calc(var(--theme-line-height-base) * 0.1rem);
 }
 
 .thumb {
@@ -120,6 +129,13 @@
 .label {
   opacity: 0.5;
   font-size: var(--font-size);
+}
+
+.year {
+  opacity: 0.4;
+  font-size: var(--font-size);
+  text-align: right;
+  white-space: nowrap;
 }
 
 .check {
