@@ -5,6 +5,7 @@ import grammyData from '@/data/grammy-aoty.json';
 import Card from '@components/Card';
 import Input from '@components/Input';
 import ActionButton from '@components/ActionButton';
+import ButtonGroup from '@components/ButtonGroup';
 import styles from './Lists.module.css';
 
 interface AlbumEntry {
@@ -36,24 +37,28 @@ interface AlbumRowProps {
   album: string;
   artist: string;
   count: number | null;
+  showArtist?: boolean;
 }
 
-function AlbumRow({ label, album, artist, count }: AlbumRowProps) {
+function AlbumRow({ label, album, artist, count, showArtist = true }: AlbumRowProps) {
   const isResolved = count != null;
   const scrobbled = isResolved && count > 0;
   return (
     <div className={`${styles.row} ${scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : ''}`}>
-      <span className={styles.year}>{label}</span>
+      <span className={styles.label}>{label}</span>
       <span className={styles.check}>{!isResolved ? '·' : scrobbled ? '✓' : '✗'}</span>
       <span className={styles.album}>{album}</span>
-      <span className={styles.artist}>{artist}</span>
+      {showArtist && <span className={styles.artist}>{artist}</span>}
       {scrobbled && <span className={styles.count}>{count.toLocaleString()}</span>}
     </div>
   );
 }
 
+type ListMode = 'grammy' | 'discography';
+
 export default function Lists() {
   const [username, setUsername] = React.useState('');
+  const [mode, setMode] = React.useState<ListMode>('grammy');
 
   // Grammy state
   const [grammyPlaycounts, setGrammyPlaycounts] = React.useState<Record<string, number | null>>({});
@@ -117,82 +122,105 @@ export default function Lists() {
     setDiscoLoading(false);
   };
 
-  const grammyChecked = Object.values(grammyPlaycounts).filter((v) => (v ?? 0) > 0).length;
-  const grammyResolved = Object.keys(grammyPlaycounts).length;
+  const isLoading = mode === 'grammy' ? grammyLoading : discoLoading;
 
-  const discoChecked = Object.values(discoPlaycounts).filter((v) => (v ?? 0) > 0).length;
+  const grammyResolved = Object.keys(grammyPlaycounts).length;
+  const grammyChecked = Object.values(grammyPlaycounts).filter((v) => (v ?? 0) > 0).length;
+
   const discoResolved = Object.keys(discoPlaycounts).length;
+  const discoChecked = Object.values(discoPlaycounts).filter((v) => (v ?? 0) > 0).length;
+
+  const cardTitle = mode === 'grammy'
+    ? 'GRAMMY — ALBUM OF THE YEAR'
+    : discoArtist ? discoArtist.toUpperCase() : 'DISCOGRAPHY';
+
+  const score = mode === 'grammy'
+    ? (grammyResolved > 0 ? `${grammyChecked}/${GRAMMY_LIST.length} SCROBBLED` : null)
+    : (discoResolved > 0 ? `${discoChecked}/${discoAlbums.length} SCROBBLED` : null);
 
   return (
-    <div className={styles.container}>
-      <div className={styles.usernameRow}>
-        <Input
-          label="USERNAME"
-          prefix="@"
-          placeholder="e.g. rj"
-          value={username}
-          onChange={(e) => {
-            setUsername(e.target.value);
-            localStorage.setItem('lastfm-username', e.target.value);
-          }}
-          isBlink
-        />
-      </div>
-
-      <Card title="GRAMMY — ALBUM OF THE YEAR">
-        <div className={styles.header}>
-          <ActionButton onClick={handleGrammyCheck} disabled={grammyLoading || !username.trim()}>
-            {grammyLoading ? `${grammyResolved}/${GRAMMY_LIST.length}` : 'CHECK'}
-          </ActionButton>
-          {grammyResolved > 0 && (
-            <span className={styles.score}>{grammyChecked}/{GRAMMY_LIST.length} SCROBBLED</span>
-          )}
-        </div>
-        <div className={styles.list}>
-          {GRAMMY_LIST.map((entry) => (
-            <AlbumRow
-              key={entryKey(entry.artist, entry.album)}
-              label={String(entry.year)}
-              album={entry.album}
-              artist={entry.artist}
-              count={grammyPlaycounts[entryKey(entry.artist, entry.album)] ?? null}
-            />
-          ))}
-        </div>
-      </Card>
-
-      <Card title="ARTIST DISCOGRAPHY">
-        <div className={styles.header}>
-          <Input
-            label="ARTIST"
-            placeholder="e.g. Radiohead"
-            value={artistQuery}
-            onChange={(e) => setArtistQuery(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleDiscoCheck(); }}
-            isBlink
-          />
-          <ActionButton onClick={handleDiscoCheck} disabled={discoLoading || !artistQuery.trim() || !username.trim()}>
-            {discoLoading ? `${discoResolved}/${discoAlbums.length || '?'}` : 'CHECK'}
-          </ActionButton>
-          {discoResolved > 0 && (
-            <span className={styles.score}>{discoChecked}/{discoAlbums.length} SCROBBLED</span>
-          )}
-        </div>
-        {discoError && <div className={styles.error}>{discoError}</div>}
-        {discoAlbums.length > 0 && (
+    <div className={styles.pageRow}>
+      <div className={styles.mainCol}>
+        <Card title={cardTitle}>
           <div className={styles.list}>
-            {discoAlbums.map((album, i) => (
+            {mode === 'grammy' && GRAMMY_LIST.map((entry) => (
+              <AlbumRow
+                key={entryKey(entry.artist, entry.album)}
+                label={String(entry.year)}
+                album={entry.album}
+                artist={entry.artist}
+                count={grammyPlaycounts[entryKey(entry.artist, entry.album)] ?? null}
+              />
+            ))}
+            {mode === 'discography' && discoAlbums.length === 0 && !discoLoading && (
+              <div className={styles.empty}>Search an artist to see their discography.</div>
+            )}
+            {mode === 'discography' && discoAlbums.map((album, i) => (
               <AlbumRow
                 key={entryKey(discoArtist, album.name)}
                 label={String(i + 1)}
                 album={album.name}
                 artist={discoArtist}
+                showArtist={false}
                 count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
               />
             ))}
           </div>
-        )}
-      </Card>
+        </Card>
+      </div>
+
+      <div className={styles.sidebarCol}>
+        <Card title="LISTS">
+          <div className={styles.sidebar}>
+            <Input
+              label="USERNAME"
+              prefix="@"
+              placeholder="e.g. rj"
+              value={username}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                localStorage.setItem('lastfm-username', e.target.value);
+              }}
+              isBlink
+            />
+
+            <div className={styles.modeRow}>
+              <ButtonGroup
+                isFull
+                items={[
+                  { body: 'GRAMMY AOTY', selected: mode === 'grammy', onClick: () => setMode('grammy') },
+                  { body: 'DISCOGRAPHY', selected: mode === 'discography', onClick: () => setMode('discography') },
+                ]}
+              />
+            </div>
+
+            {mode === 'discography' && (
+              <Input
+                label="ARTIST"
+                placeholder="e.g. Radiohead"
+                value={artistQuery}
+                onChange={(e) => setArtistQuery(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleDiscoCheck(); }}
+                isBlink
+              />
+            )}
+
+            {discoError && <div className={styles.error}>{discoError}</div>}
+
+            <div className={styles.actions}>
+              <ActionButton
+                onClick={mode === 'grammy' ? handleGrammyCheck : handleDiscoCheck}
+                disabled={isLoading || !username.trim() || (mode === 'discography' && !artistQuery.trim())}
+              >
+                {isLoading
+                  ? (mode === 'grammy' ? `${grammyResolved}/${GRAMMY_LIST.length}` : `${discoResolved}/${discoAlbums.length || '?'}`)
+                  : 'CHECK'}
+              </ActionButton>
+              {score && <span className={styles.score}>{score}</span>}
+            </div>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

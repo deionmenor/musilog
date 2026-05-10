@@ -1,40 +1,69 @@
-.container {
+.pageRow {
+  display: flex;
+  align-items: stretch;
+  gap: 2ch;
+  width: 100%;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mainCol {
   width: 100%;
   max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sidebarCol {
+  flex-shrink: 0;
+  width: 48ch;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--theme-line-height-base) * 1rem);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.sidebar {
   display: flex;
   flex-direction: column;
   gap: calc(var(--theme-line-height-base) * 0.5rem);
 }
 
-.usernameRow {
-  width: 100%;
+.modeRow {
+  padding: calc(var(--theme-line-height-base) * 0.25rem) 0;
 }
 
-.error {
-  color: var(--theme-red);
-  font-size: var(--font-size);
-  margin-bottom: calc(var(--theme-line-height-base) * 0.25rem);
-}
-
-.header {
+.actions {
   display: flex;
-  align-items: flex-end;
-  gap: 1ch;
-  margin-bottom: calc(var(--theme-line-height-base) * 0.5rem);
+  align-items: center;
+  gap: 2ch;
+  padding-top: calc(var(--theme-line-height-base) * 0.25rem);
 }
 
 .score {
-  margin-left: auto;
   opacity: 0.5;
   font-size: var(--font-size);
   white-space: nowrap;
 }
 
+.error {
+  color: var(--theme-red);
+  font-size: var(--font-size);
+}
+
+.empty {
+  color: var(--theme-overlay);
+  padding: calc(var(--theme-line-height-base) * 0.5rem) 0;
+}
+
 .list {
   display: flex;
   flex-direction: column;
-  max-height: 480px;
-  overflow-y: auto;
 }
 
 .row {
@@ -60,7 +89,7 @@
   opacity: 0.3;
 }
 
-.year {
+.label {
   opacity: 0.5;
   font-size: var(--font-size);
 }
@@ -96,4 +125,10 @@
   font-size: var(--font-size);
   white-space: nowrap;
   text-align: right;
+}
+
+@media (max-width: 480px) {
+  .sidebarCol {
+    display: none;
+  }
 }
