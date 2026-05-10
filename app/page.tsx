@@ -697,10 +697,13 @@ export default function Home() {
         { hotkey: 'K', body: ytPlaying ? 'PAUSE' : 'PLAY', onClick: () => ytPlaying ? ytPlayerActionsRef.current?.pause() : ytPlayerActionsRef.current?.play() },
         { hotkey: 'ESC', body: 'STOP', onClick: closeYtEmbed },
       ] : []}
-      rightItems={[{ hotkey: '♥', body: 'SUPPORT', onClick: () => window.open('https://deionmenor.com', '_blank') }]}
+      rightItems={[
+        { hotkey: '♥', body: 'SUPPORT', onClick: () => window.open('https://deionmenor.com', '_blank') },
+        { hotkey: '<>', body: 'SOURCE', onClick: () => window.open('https://github.com/deionmenor/musilog', '_blank') },
+      ]}
+      rightChildren={<ThemeDropdown hotkey="◑" label="THEME" items={THEMES} currentId={theme} onSelect={(id) => setTheme(id as Theme)} />}
     >
       <ThemeDropdown label={appMode === 'rank' ? 'RANK MODE' : 'CHARTS'} items={APP_MODES} currentId={appMode} onSelect={(id) => setAppMode(id as 'charts' | 'rank')} />
-      <ThemeDropdown hotkey="◑" label="THEME" items={THEMES} currentId={theme} onSelect={(id) => setTheme(id as Theme)} />
     </ActionBar>
     <main className={styles.main}>
       {appMode === 'rank' && <RankMode />}
