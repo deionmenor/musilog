@@ -6,6 +6,8 @@ import Card from '@components/Card';
 import Input from '@components/Input';
 import ActionButton from '@components/ActionButton';
 import ButtonGroup from '@components/ButtonGroup';
+import YoutubePlayer, { YoutubePlayerActions } from '@components/YoutubePlayer';
+import Tooltip from '@components/Tooltip';
 import styles from './Lists.module.css';
 
 interface AlbumEntry {
@@ -81,9 +83,11 @@ interface AlbumRowProps {
   year?: string | null;
   fadeListened?: boolean;
   isVariant?: boolean;
+  isSelected?: boolean;
+  onClick?: () => void;
 }
 
-function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year, fadeListened, isVariant }: AlbumRowProps) {
+function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year, fadeListened, isVariant, isSelected, onClick }: AlbumRowProps) {
   const isResolved = count != null;
   const scrobbled = isResolved && count > 0;
   const hasImage = imageUrl != null;
@@ -91,13 +95,17 @@ function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, ye
     hasImage ? styles.rowWithImage : styles.row,
     fadeListened && scrobbled ? styles.faded : '',
     isVariant ? styles.variant : '',
+    isSelected ? styles.rowSelected : '',
+    onClick ? styles.rowClickable : '',
   ].join(' ');
   return (
-    <div className={rowClass}>
+    <div className={rowClass} onClick={onClick}>
       <span className={styles.label}>{label}</span>
-      <span className={`${styles.check} ${!isResolved ? '' : scrobbled ? styles.checkYes : styles.checkNo}`}>
-        {!isResolved ? '·' : scrobbled ? '✓' : '✗'}
-      </span>
+      <Tooltip content={scrobbled ? `${count!.toLocaleString()} scrobbles` : undefined}>
+        <span className={`${styles.check} ${!isResolved ? '' : scrobbled ? styles.checkYes : styles.checkNo}`}>
+          {!isResolved ? '·' : scrobbled ? '✓' : '✗'}
+        </span>
+      </Tooltip>
       {hasImage && (
         <span className={styles.thumb}>
           {imageUrl ? <img src={imageUrl} alt="" className={styles.thumbImg} /> : null}
@@ -106,8 +114,34 @@ function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, ye
       <span className={styles.album}>{album}</span>
       {showArtist && <span className={styles.artist}>{artist}</span>}
       {year && <span className={styles.year}>{year}</span>}
-      {scrobbled && <span className={styles.count}>{count.toLocaleString()}</span>}
     </div>
+  );
+}
+
+function fmtDur(s: number): string {
+  if (!s) return '';
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+interface DiscoTrack { rank: number; name: string; duration: number; playcount: number; }
+
+function TrackPlayBtn({ artist, track, onPlay }: { artist: string; track: string; onPlay: (videoId: string) => void }) {
+  const [loading, setLoading] = React.useState(false);
+  const [videoId, setVideoId] = React.useState<string | null>(null);
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (videoId) { onPlay(videoId); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/yt-link?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}`);
+      const data = await res.json();
+      if (data.videoId) { setVideoId(data.videoId); onPlay(data.videoId); }
+    } finally { setLoading(false); }
+  };
+  return (
+    <button className={styles.trackPlayBtn} onClick={handleClick} disabled={loading} title="Play">
+      {loading ? '…' : '▶'}
+    </button>
   );
 }
 
@@ -123,6 +157,8 @@ export default function Lists() {
 
   // Discography state
   const [artistQuery, setArtistQuery] = React.useState('');
+  const [discoSearchResults, setDiscoSearchResults] = React.useState<{ name: string; listeners: number; imageUrl: string | null }[] | null>(null);
+  const [discoSearching, setDiscoSearching] = React.useState(false);
   const [discoArtist, setDiscoArtist] = React.useState('');
   const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string; imageUrl: string | null; year: string | null; releaseType: string }[]>([]);
   const [discoTypeFilter, setDiscoTypeFilter] = React.useState<'all' | 'album' | 'ep-single'>('all');
@@ -131,10 +167,48 @@ export default function Lists() {
   const [discoLoading, setDiscoLoading] = React.useState(false);
   const [discoError, setDiscoError] = React.useState('');
 
+  // Tracklist / player state
+  const [tracklistAlbum, setTracklistAlbum] = React.useState<{ name: string; artist: string } | null>(null);
+  const [tracklist, setTracklist] = React.useState<DiscoTrack[] | null>(null);
+  const [tracklistLoading, setTracklistLoading] = React.useState(false);
+  const [ytEmbed, setYtEmbed] = React.useState<{ videoId: string; title: string; trackIdx: number } | null>(null);
+  const [ytPlaying, setYtPlaying] = React.useState(false);
+  const ytActionsRef = React.useRef<YoutubePlayerActions | null>(null);
+
   React.useEffect(() => {
     const saved = localStorage.getItem('lastfm-username');
     if (saved) setUsername(saved);
   }, []);
+
+  const resetDisco = () => {
+    setDiscoSearchResults(null);
+    setDiscoArtist('');
+    setDiscoAlbums([]);
+    setDiscoPlaycounts({});
+    setDiscoError('');
+  };
+
+  const handleAlbumClick = async (artist: string, album: string) => {
+    setTracklistAlbum({ name: album, artist });
+    setTracklist(null);
+    setTracklistLoading(true);
+    setYtEmbed(null);
+    const res = await fetch(`/api/album-info?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}`);
+    const data = await res.json();
+    setTracklist(data.tracks ?? []);
+    setTracklistLoading(false);
+  };
+
+  const handleYtNavigate = (trackIdx: number) => {
+    if (!tracklist || !tracklistAlbum) return;
+    const t = tracklist[trackIdx];
+    if (!t) return;
+    fetch(`/api/yt-link?artist=${encodeURIComponent(tracklistAlbum.artist)}&track=${encodeURIComponent(t.name)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.videoId) setYtEmbed({ videoId: data.videoId, title: `${tracklistAlbum.artist} — ${t.name}`, trackIdx });
+      });
+  };
 
   const handleGrammyCheck = async () => {
     if (!username.trim()) return;
@@ -150,15 +224,26 @@ export default function Lists() {
     setGrammyLoading(false);
   };
 
-  const handleDiscoCheck = async () => {
-    if (!artistQuery.trim() || !username.trim()) return;
+  const handleArtistSearch = async () => {
+    if (!artistQuery.trim()) return;
+    setDiscoSearching(true);
+    resetDisco();
+    const res = await fetch(`/api/artist-search?q=${encodeURIComponent(artistQuery.trim())}`);
+    const data = await res.json();
+    setDiscoSearchResults(data.artists ?? []);
+    setDiscoSearching(false);
+  };
+
+  const handleSelectArtist = async (artistName: string) => {
+    if (!username.trim()) return;
     setDiscoLoading(true);
+    setDiscoSearchResults(null);
     setDiscoError('');
     setDiscoAlbums([]);
     setDiscoPlaycounts({});
     setDiscoArtist('');
 
-    const res = await fetch(`/api/artist-discography?artist=${encodeURIComponent(artistQuery.trim())}`);
+    const res = await fetch(`/api/artist-discography?artist=${encodeURIComponent(artistName)}`);
     const data = await res.json();
 
     if (!res.ok || data.error) {
@@ -181,7 +266,7 @@ export default function Lists() {
     setDiscoLoading(false);
   };
 
-  const isLoading = mode === 'grammy' ? grammyLoading : discoLoading;
+  const isLoading = mode === 'grammy' ? grammyLoading : (discoLoading || discoSearching);
 
   const grammyResolved = Object.keys(grammyPlaycounts).length;
   const grammyChecked = Object.values(grammyPlaycounts).filter((v) => (v ?? 0) > 0).length;
@@ -210,43 +295,56 @@ export default function Lists() {
                 artist={entry.artist}
                 count={grammyPlaycounts[entryKey(entry.artist, entry.album)] ?? null}
                 fadeListened={fadeListened}
+                isSelected={tracklistAlbum?.artist === entry.artist && tracklistAlbum?.name === entry.album}
+                onClick={() => handleAlbumClick(entry.artist, entry.album)}
               />
             ))}
-            {mode === 'discography' && discoAlbums.length === 0 && !discoLoading && (
+            {mode === 'discography' && !discoSearchResults && discoAlbums.length === 0 && !discoLoading && !discoSearching && (
               <div className={styles.empty}>Search an artist to see their discography.</div>
+            )}
+            {mode === 'discography' && discoSearchResults && (
+              discoSearchResults.length === 0
+                ? <div className={styles.empty}>No artists found.</div>
+                : discoSearchResults.map((a) => (
+                    <div
+                      key={a.name}
+                      className={styles.searchResult}
+                      onClick={() => { setArtistQuery(a.name); handleSelectArtist(a.name); }}
+                    >
+                      {a.imageUrl && <img src={a.imageUrl} alt="" className={styles.searchResultImg} />}
+                      <span className={styles.searchResultName}>{a.name}</span>
+                      <span className={styles.searchResultListeners}>{a.listeners.toLocaleString()} listeners</span>
+                    </div>
+                  ))
             )}
             {mode === 'discography' && (() => {
               const byYear = (a: DiscoAlbum, b: DiscoAlbum) =>
                 (a.year ?? '9999').localeCompare(b.year ?? '9999');
 
-              const renderGroup = (group: AlbumGroup, index: number) => (
-                <React.Fragment key={entryKey(discoArtist, group.primary.name)}>
+              const renderGroup = (group: AlbumGroup, index: number) => {
+                const primaryRaw = discoPlaycounts[entryKey(discoArtist, group.primary.name)];
+                const aggregatedCount = primaryRaw === undefined
+                  ? null
+                  : group.variants.reduce((sum, v) => sum + (discoPlaycounts[entryKey(discoArtist, v.name)] ?? 0), primaryRaw);
+                const isGroupSelected = group.variants.some(
+                  (v) => tracklistAlbum?.artist === discoArtist && tracklistAlbum?.name === v.name
+                ) || (tracklistAlbum?.artist === discoArtist && tracklistAlbum?.name === group.primary.name);
+                return (
                   <AlbumRow
+                    key={entryKey(discoArtist, group.primary.name)}
                     label={String(index + 1)}
                     album={group.primary.name}
                     artist={discoArtist}
                     showArtist={false}
                     imageUrl={group.primary.imageUrl}
                     year={group.primary.year}
-                    count={discoPlaycounts[entryKey(discoArtist, group.primary.name)] ?? null}
+                    count={aggregatedCount}
                     fadeListened={fadeListened}
+                    isSelected={isGroupSelected}
+                    onClick={() => handleAlbumClick(discoArtist, group.primary.name)}
                   />
-                  {group.variants.map((v) => (
-                    <AlbumRow
-                      key={entryKey(discoArtist, v.name)}
-                      label="↳"
-                      album={v.name}
-                      artist={discoArtist}
-                      showArtist={false}
-                      imageUrl={v.imageUrl}
-                      year={v.year}
-                      count={discoPlaycounts[entryKey(discoArtist, v.name)] ?? null}
-                      fadeListened={fadeListened}
-                      isVariant
-                    />
-                  ))}
-                </React.Fragment>
-              );
+                );
+              };
 
               if (discoTypeFilter !== 'all') {
                 const filtered = discoAlbums.filter((a) =>
@@ -309,7 +407,7 @@ export default function Lists() {
                   placeholder="e.g. Radiohead"
                   value={artistQuery}
                   onChange={(e) => setArtistQuery(e.target.value)}
-                  onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleDiscoCheck(); }}
+                  onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleArtistSearch(); }}
                   isBlink
                 />
                 {discoAlbums.length > 0 && (
@@ -328,14 +426,48 @@ export default function Lists() {
             {discoError && <div className={styles.error}>{discoError}</div>}
 
             <div className={styles.actions}>
-              <ActionButton
-                onClick={mode === 'grammy' ? handleGrammyCheck : handleDiscoCheck}
-                disabled={isLoading || !username.trim() || (mode === 'discography' && !artistQuery.trim())}
-              >
-                {isLoading
-                  ? (mode === 'grammy' ? `${grammyResolved}/${GRAMMY_LIST.length}` : `${discoResolved}/${discoAlbums.length || '?'}`)
-                  : 'CHECK'}
-              </ActionButton>
+              {mode === 'grammy' && (
+                <ActionButton
+                  onClick={handleGrammyCheck}
+                  disabled={isLoading || !username.trim()}
+                >
+                  {grammyLoading ? `${grammyResolved}/${GRAMMY_LIST.length}` : 'CHECK'}
+                </ActionButton>
+              )}
+              {mode === 'discography' && !discoArtist && (
+                <ActionButton
+                  onClick={handleArtistSearch}
+                  disabled={isLoading || !artistQuery.trim()}
+                >
+                  {discoSearching ? '...' : 'SEARCH'}
+                </ActionButton>
+              )}
+              {mode === 'discography' && (discoArtist || discoSearchResults) && (
+                <ActionButton
+                  onClick={() => { resetDisco(); setArtistQuery(''); }}
+                  disabled={isLoading}
+                >
+                  BACK
+                </ActionButton>
+              )}
+              {mode === 'discography' && discoArtist && (
+                <ActionButton
+                  disabled={isLoading || !username.trim()}
+                  onClick={() => {
+                    setDiscoPlaycounts({});
+                    const user = username.trim();
+                    setDiscoLoading(true);
+                    Promise.all(
+                      discoAlbums.map(async (album) => {
+                        const count = await fetchPlaycount(discoArtist, album.name, user);
+                        setDiscoPlaycounts((prev) => ({ ...prev, [entryKey(discoArtist, album.name)]: count }));
+                      })
+                    ).then(() => setDiscoLoading(false));
+                  }}
+                >
+                  {discoLoading ? `${discoResolved}/${discoAlbums.length}` : 'CHECK'}
+                </ActionButton>
+              )}
               <ActionButton isSelected={fadeListened} onClick={() => setFadeListened((v) => !v)}>
                 FADE LISTENED
               </ActionButton>
@@ -343,6 +475,65 @@ export default function Lists() {
             {score && <span className={styles.score}>{score}</span>}
           </div>
         </Card>
+
+        {ytEmbed && (
+          <Card title={ytEmbed.title}>
+            <div className={styles.ytEmbedWrapper}>
+              <YoutubePlayer
+                videoId={ytEmbed.videoId}
+                onPlayingChange={setYtPlaying}
+                onPlayerReady={(a) => { ytActionsRef.current = a; }}
+                onEnded={() => { if (tracklist && ytEmbed.trackIdx < tracklist.length - 1) handleYtNavigate(ytEmbed.trackIdx + 1); }}
+              />
+            </div>
+            <div className={styles.ytControls}>
+              <div className={styles.ytNavButtons}>
+                {ytEmbed.trackIdx > 0 && <ActionButton onClick={() => handleYtNavigate(ytEmbed.trackIdx - 1)}>PREV</ActionButton>}
+                {tracklist?.[ytEmbed.trackIdx + 1] && <ActionButton onClick={() => handleYtNavigate(ytEmbed.trackIdx + 1)}>NEXT</ActionButton>}
+              </div>
+              <div className={styles.ytNavButtons}>
+                <ActionButton onClick={() => ytPlaying ? ytActionsRef.current?.pause() : ytActionsRef.current?.play()}>
+                  {ytPlaying ? 'PAUSE' : 'PLAY'}
+                </ActionButton>
+                <ActionButton onClick={() => setYtEmbed(null)}>STOP</ActionButton>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {tracklistAlbum && (
+          <Card title={`${tracklistAlbum.name.toUpperCase()} — TRACKLIST`}>
+            {tracklistLoading && <div className={styles.tracklistLoading}>LOADING...</div>}
+            {tracklist && tracklist.length === 0 && <div className={styles.empty}>No tracks found.</div>}
+            {tracklist && tracklist.length > 0 && (() => {
+              const withPlays = tracklist.filter((t) => t.playcount > 0);
+              const hotSet = new Set(
+                [...withPlays].sort((a, b) => b.playcount - a.playcount).slice(0, 3).map((t) => t.rank)
+              );
+              return (
+                <div className={styles.tracklist}>
+                  {tracklist.map((t, i) => (
+                    <div key={t.rank} className={[styles.trackRow, ytEmbed?.trackIdx === i ? styles.trackRowPlaying : ''].join(' ')}>
+                      <span className={styles.trackNum}>{t.rank}.</span>
+                      <span className={styles.trackName}>{t.name}</span>
+                      {hotSet.has(t.rank) && (
+                        <Tooltip content={`${t.playcount.toLocaleString()} plays`}>
+                          <span className={styles.hotDot} />
+                        </Tooltip>
+                      )}
+                      {t.duration > 0 && <span className={styles.trackDur}>{fmtDur(t.duration)}</span>}
+                      <TrackPlayBtn
+                        artist={tracklistAlbum.artist}
+                        track={t.name}
+                        onPlay={(videoId) => setYtEmbed({ videoId, title: `${tracklistAlbum.artist} — ${t.name}`, trackIdx: i })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </Card>
+        )}
       </div>
     </div>
   );
