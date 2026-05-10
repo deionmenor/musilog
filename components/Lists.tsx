@@ -20,6 +20,45 @@ function entryKey(artist: string, album: string) {
   return `${artist}::${album}`;
 }
 
+function normalizeTitle(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\s*[\(\[].*?[\)\]]\s*/g, ' ')
+    .replace(/\b(remaster(ed)?|deluxe|expanded|special|anniversary|bonus|live|extended|vol\.?\s*\d+|edition|version)\b/g, '')
+    .replace(/[^a-z0-9]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+type DiscoAlbum = { name: string; imageUrl: string | null; year: string | null; releaseType: string };
+interface AlbumGroup { primary: DiscoAlbum; variants: DiscoAlbum[] }
+
+function buildGroups(albums: DiscoAlbum[]): AlbumGroup[] {
+  const assigned = new Set<string>();
+  const groups: AlbumGroup[] = [];
+
+  for (const album of albums) {
+    if (assigned.has(album.name)) continue;
+    const norm = normalizeTitle(album.name);
+    const similar = norm
+      ? albums.filter((b) => b.name !== album.name && !assigned.has(b.name) && normalizeTitle(b.name) === norm)
+      : [];
+
+    assigned.add(album.name);
+    similar.forEach((b) => assigned.add(b.name));
+
+    const all = [album, ...similar].sort((a, b) => {
+      if (a.releaseType === 'album' && b.releaseType !== 'album') return -1;
+      if (b.releaseType === 'album' && a.releaseType !== 'album') return 1;
+      return (a.year ?? '9999').localeCompare(b.year ?? '9999');
+    });
+
+    groups.push({ primary: all[0], variants: all.slice(1) });
+  }
+
+  return groups;
+}
+
 async function fetchPlaycount(artist: string, album: string, username: string): Promise<number> {
   try {
     const res = await fetch(
@@ -41,15 +80,17 @@ interface AlbumRowProps {
   imageUrl?: string | null;
   year?: string | null;
   fadeListened?: boolean;
+  isVariant?: boolean;
 }
 
-function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year, fadeListened }: AlbumRowProps) {
+function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl, year, fadeListened, isVariant }: AlbumRowProps) {
   const isResolved = count != null;
   const scrobbled = isResolved && count > 0;
   const hasImage = imageUrl != null;
   const rowClass = [
     hasImage ? styles.rowWithImage : styles.row,
     fadeListened && scrobbled ? styles.faded : '',
+    isVariant ? styles.variant : '',
   ].join(' ');
   return (
     <div className={rowClass}>
@@ -175,42 +216,60 @@ export default function Lists() {
               <div className={styles.empty}>Search an artist to see their discography.</div>
             )}
             {mode === 'discography' && (() => {
-              const albums = discoAlbums.filter((a) =>
-                discoTypeFilter === 'all' ? true :
-                discoTypeFilter === 'album' ? a.releaseType === 'album' :
-                a.releaseType === 'ep' || a.releaseType === 'single'
-              );
-              const byYear = (a: typeof albums[0], b: typeof albums[0]) =>
+              const byYear = (a: DiscoAlbum, b: DiscoAlbum) =>
                 (a.year ?? '9999').localeCompare(b.year ?? '9999');
-              const mainAlbums = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'album').sort(byYear) : albums.sort(byYear);
-              const epSingles = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'ep' || a.releaseType === 'single').sort(byYear) : [];
-              const others = discoTypeFilter === 'all' ? albums.filter((a) => a.releaseType === 'other').sort(byYear) : [];
 
-              const renderRows = (subset: typeof albums, offset = 0) =>
-                subset.map((album, i) => (
+              const renderGroup = (group: AlbumGroup, index: number) => (
+                <React.Fragment key={entryKey(discoArtist, group.primary.name)}>
                   <AlbumRow
-                    key={entryKey(discoArtist, album.name)}
-                    label={String(i + 1 + offset)}
-                    album={album.name}
+                    label={String(index + 1)}
+                    album={group.primary.name}
                     artist={discoArtist}
                     showArtist={false}
-                    imageUrl={album.imageUrl}
-                    year={album.year}
-                    count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
+                    imageUrl={group.primary.imageUrl}
+                    year={group.primary.year}
+                    count={discoPlaycounts[entryKey(discoArtist, group.primary.name)] ?? null}
                     fadeListened={fadeListened}
                   />
-                ));
+                  {group.variants.map((v) => (
+                    <AlbumRow
+                      key={entryKey(discoArtist, v.name)}
+                      label="↳"
+                      album={v.name}
+                      artist={discoArtist}
+                      showArtist={false}
+                      imageUrl={v.imageUrl}
+                      year={v.year}
+                      count={discoPlaycounts[entryKey(discoArtist, v.name)] ?? null}
+                      fadeListened={fadeListened}
+                      isVariant
+                    />
+                  ))}
+                </React.Fragment>
+              );
 
-              if (discoTypeFilter !== 'all') return renderRows(albums);
+              if (discoTypeFilter !== 'all') {
+                const filtered = discoAlbums.filter((a) =>
+                  discoTypeFilter === 'album' ? a.releaseType === 'album' :
+                  a.releaseType === 'ep' || a.releaseType === 'single'
+                );
+                return buildGroups(filtered).sort((a, b) => byYear(a.primary, b.primary)).map(renderGroup);
+              }
+
+              // ALL view: build groups across full list, then section by primary type
+              const groups = buildGroups(discoAlbums);
+              const albumGroups  = groups.filter((g) => g.primary.releaseType === 'album').sort((a, b) => byYear(a.primary, b.primary));
+              const epGroups     = groups.filter((g) => g.primary.releaseType === 'ep' || g.primary.releaseType === 'single').sort((a, b) => byYear(a.primary, b.primary));
+              const otherGroups  = groups.filter((g) => g.primary.releaseType === 'other').sort((a, b) => byYear(a.primary, b.primary));
 
               return (
                 <>
-                  {mainAlbums.length > 0 && <div className={styles.sectionHeader}>ALBUMS</div>}
-                  {renderRows(mainAlbums)}
-                  {epSingles.length > 0 && <div className={styles.sectionHeader}>EPS & SINGLES</div>}
-                  {renderRows(epSingles)}
-                  {others.length > 0 && <div className={styles.sectionHeader}>OTHER</div>}
-                  {renderRows(others)}
+                  {albumGroups.length > 0  && <div className={styles.sectionHeader}>ALBUMS</div>}
+                  {albumGroups.map(renderGroup)}
+                  {epGroups.length > 0     && <div className={styles.sectionHeader}>EPS & SINGLES</div>}
+                  {epGroups.map((g, i) => renderGroup(g, i))}
+                  {otherGroups.length > 0  && <div className={styles.sectionHeader}>OTHER</div>}
+                  {otherGroups.map((g, i) => renderGroup(g, i))}
                 </>
               );
             })()}

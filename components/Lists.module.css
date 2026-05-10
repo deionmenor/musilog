@@ -90,6 +90,16 @@
   opacity: 0.25;
 }
 
+.variant {
+  opacity: 0.5;
+  font-size: calc(var(--font-size) * 0.9);
+  padding-left: 1ch;
+}
+
+.variant.faded {
+  opacity: 0.15;
+}
+
 .sectionHeader {
   font-size: calc(var(--font-size) * 0.8);
   letter-spacing: 0.1em;
