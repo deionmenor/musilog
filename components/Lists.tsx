@@ -38,15 +38,25 @@ interface AlbumRowProps {
   artist: string;
   count: number | null;
   showArtist?: boolean;
+  imageUrl?: string | null;
 }
 
-function AlbumRow({ label, album, artist, count, showArtist = true }: AlbumRowProps) {
+function AlbumRow({ label, album, artist, count, showArtist = true, imageUrl }: AlbumRowProps) {
   const isResolved = count != null;
   const scrobbled = isResolved && count > 0;
+  const rowClass = [
+    imageUrl != null ? styles.rowWithImage : styles.row,
+    scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : '',
+  ].join(' ');
   return (
-    <div className={`${styles.row} ${scrobbled ? styles.scrobbled : isResolved ? styles.unscrobbled : ''}`}>
+    <div className={rowClass}>
       <span className={styles.label}>{label}</span>
       <span className={styles.check}>{!isResolved ? '·' : scrobbled ? '✓' : '✗'}</span>
+      {imageUrl != null && (
+        <span className={styles.thumb}>
+          {imageUrl ? <img src={imageUrl} alt="" className={styles.thumbImg} /> : null}
+        </span>
+      )}
       <span className={styles.album}>{album}</span>
       {showArtist && <span className={styles.artist}>{artist}</span>}
       {scrobbled && <span className={styles.count}>{count.toLocaleString()}</span>}
@@ -67,7 +77,7 @@ export default function Lists() {
   // Discography state
   const [artistQuery, setArtistQuery] = React.useState('');
   const [discoArtist, setDiscoArtist] = React.useState('');
-  const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string }[]>([]);
+  const [discoAlbums, setDiscoAlbums] = React.useState<{ name: string; imageUrl: string | null }[]>([]);
   const [discoPlaycounts, setDiscoPlaycounts] = React.useState<Record<string, number | null>>({});
   const [discoLoading, setDiscoLoading] = React.useState(false);
   const [discoError, setDiscoError] = React.useState('');
@@ -108,7 +118,7 @@ export default function Lists() {
       return;
     }
 
-    const albums: { name: string }[] = data.albums;
+    const albums: { name: string; imageUrl: string | null }[] = data.albums;
     setDiscoArtist(data.artist);
     setDiscoAlbums(albums);
 
@@ -162,6 +172,7 @@ export default function Lists() {
                 album={album.name}
                 artist={discoArtist}
                 showArtist={false}
+                imageUrl={album.imageUrl}
                 count={discoPlaycounts[entryKey(discoArtist, album.name)] ?? null}
               />
             ))}

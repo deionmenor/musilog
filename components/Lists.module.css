@@ -70,11 +70,39 @@
   display: grid;
   grid-template-columns: 4ch 2ch 1fr auto auto;
   gap: 1ch;
-  align-items: baseline;
+  align-items: center;
   padding: calc(var(--theme-line-height-base) * 0.15rem) 0;
   border-bottom: 1px solid var(--theme-focused-foreground);
   opacity: 0.45;
   transition: opacity 0.1s;
+}
+
+.rowWithImage {
+  display: grid;
+  grid-template-columns: 4ch 2ch 2rem 1fr auto;
+  gap: 1ch;
+  align-items: center;
+  padding: calc(var(--theme-line-height-base) * 0.1rem) 0;
+  border-bottom: 1px solid var(--theme-focused-foreground);
+  opacity: 0.45;
+  transition: opacity 0.1s;
+}
+
+.thumb {
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  background: var(--theme-focused-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumbImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .row:last-child {

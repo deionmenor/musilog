@@ -29,6 +29,10 @@ export async function GET(request: NextRequest) {
     artist: artistName,
     albums: raw
       .filter((a) => a.name && a.name !== '(null)')
-      .map((a) => ({ name: a.name, mbid: a.mbid || null })),
+      .map((a) => ({
+        name: a.name,
+        mbid: a.mbid || null,
+        imageUrl: (a.image as any[])?.find((img: any) => img.size === 'medium')?.['#text'] || null,
+      })),
   });
 }
