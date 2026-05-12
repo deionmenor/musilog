@@ -32,6 +32,41 @@ function Spinner() {
   return <span>{LOADER_FRAMES[frame]}</span>;
 }
 
+function LyricsContent({
+  lyrics,
+  loading,
+  selection,
+  onLineClick,
+}: {
+  lyrics: { plain: string | null; instrumental: boolean } | null;
+  loading: boolean;
+  selection?: [number, number] | null;
+  onLineClick?: (idx: number) => void;
+}) {
+  if (loading) return <div className={styles.lyricsStatus}>LOADING...</div>;
+  if (lyrics?.instrumental) return <div className={styles.lyricsStatus}>♪ Instrumental</div>;
+  if (lyrics && !lyrics.plain) return <div className={styles.lyricsStatus}>Lyrics not found.</div>;
+  if (!lyrics?.plain) return null;
+  return (
+    <div className={styles.lyricsScroll}>
+      {lyrics.plain.split('\n').map((line, i) => {
+        const isSelected = selection ? i >= selection[0] && i <= selection[1] : false;
+        const cls = [
+          styles.lyricLine,
+          onLineClick ? styles.lyricLineClickable : '',
+          isSelected ? styles.lyricLineSelected : '',
+        ].filter(Boolean).join(' ');
+        return (
+          <div key={i} className={cls} onClick={onLineClick ? () => onLineClick(i) : undefined}>
+            <span className={styles.lyricLineNum}>{i + 1}</span>
+            <span className={styles.lyricLineText}>{line || ' '}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function LineLoader({ mode }: { mode: FetchMode }) {
   const [frame, setFrame] = React.useState(0);
   React.useEffect(() => {
@@ -153,6 +188,7 @@ function TrackYtButton({ artist, track, onPlay }: { artist: string; track: strin
   );
 }
 
+
 interface AlbumMeta {
   artUrl: string | null;
   releaseDate: string | null;
@@ -233,6 +269,12 @@ export default function Home() {
   const [ytNavLoading, setYtNavLoading] = React.useState(false);
   const ytPlayerActionsRef = React.useRef<YoutubePlayerActions | null>(null);
   const ytVideoCacheRef = React.useRef<Record<string, string>>({});
+  const [lyricsOpen, setLyricsOpen] = React.useState(false);
+  const [lyrics, setLyrics] = React.useState<{ plain: string | null; instrumental: boolean } | null>(null);
+  const [lyricsLoading, setLyricsLoading] = React.useState(false);
+  const lyricsOpenRef = React.useRef(false);
+  const [lyricAnchor, setLyricAnchor] = React.useState<number | null>(null);
+  const [lyricSelection, setLyricSelection] = React.useState<[number, number] | null>(null);
   const resultsRef = React.useRef<HTMLDivElement>(null);
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -267,7 +309,169 @@ export default function Home() {
     setYtEmbed(null);
     setYtMini(false);
     setYtPlaying(false);
+    setLyricsOpen(false);
+    setLyrics(null);
+    setLyricAnchor(null);
+    setLyricSelection(null);
   }, []);
+
+  const fetchLyrics = React.useCallback(async (artist: string, track: string) => {
+    setLyricsLoading(true);
+    setLyrics(null);
+    try {
+      const res = await fetch(`/api/lyrics?artist=${encodeURIComponent(artist)}&track=${encodeURIComponent(track)}`);
+      const data = await res.json();
+      setLyrics({
+        plain: data.plainLyrics ?? null,
+        instrumental: data.instrumental ?? false,
+      });
+    } finally {
+      setLyricsLoading(false);
+    }
+  }, []);
+
+  // Reset lyrics + selection when track changes; re-fetch if panel is open
+  React.useEffect(() => {
+    setLyrics(null);
+    setLyricAnchor(null);
+    setLyricSelection(null);
+    if (lyricsOpenRef.current && ytEmbed) {
+      const sep = ytEmbed.title.indexOf(' — ');
+      if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytEmbed?.videoId]);
+
+  React.useEffect(() => { lyricsOpenRef.current = lyricsOpen; }, [lyricsOpen]);
+
+  const handleLyricLineClick = React.useCallback((idx: number) => {
+    setLyricAnchor((anchor) => {
+      if (anchor === null || Math.abs(idx - anchor) > 3) {
+        setLyricSelection([idx, idx]);
+        return idx;
+      }
+      setLyricSelection([Math.min(idx, anchor), Math.max(idx, anchor)]);
+      return anchor;
+    });
+  }, []);
+
+  const handleLyricsExport = React.useCallback(async () => {
+    if (!ytEmbed || !lyrics?.plain || !lyricSelection) return;
+    const lines = lyrics.plain.split('\n');
+    const selectedLines = lines.slice(lyricSelection[0], lyricSelection[1] + 1);
+    const lineNumbers = Array.from({ length: selectedLines.length }, (_, i) => lyricSelection[0] + i + 1);
+
+    const sep = ytEmbed.title.indexOf(' — ');
+    const artist = sep !== -1 ? ytEmbed.title.slice(0, sep) : ytEmbed.title;
+    const trackName = sep !== -1 ? ytEmbed.title.slice(sep + 3) : '';
+    const albumName = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0 ? albums[ytEmbed.albumIdx]?.name ?? null : null;
+    const artUrl = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0 ? albumMetas[ytEmbed.albumIdx]?.artUrl ?? null : null;
+
+    const bodyStyle = getComputedStyle(document.body);
+    const bgColor = bodyStyle.getPropertyValue('--theme-background').trim() || '#1e1e2e';
+    const textColor = bodyStyle.getPropertyValue('--theme-text').trim() || '#cdd6f4';
+    const overlayColor = bodyStyle.getPropertyValue('--theme-overlay').trim() || '#6c7086';
+    const fontFamily = bodyStyle.fontFamily;
+
+    const scale = 2;
+    const W = 560 * scale;
+    const pad = 28 * scale;
+    const artSize = 72 * scale;
+    const fontSize = 13 * scale;
+    const smallSize = 11 * scale;
+    const lineH = 20 * scale;
+    const gutterW = 36 * scale;
+    const lyricsTopPad = 20 * scale;
+
+    const headerH = artSize;
+    const lyricsH = selectedLines.length * lineH;
+    const H = pad + headerH + lyricsTopPad + lyricsH + lyricsTopPad + lineH + pad;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+
+    // Album art
+    if (artUrl) {
+      try {
+        const proxyRes = await fetch(`/api/proxy-image?url=${encodeURIComponent(artUrl)}`);
+        const blob = await proxyRes.blob();
+        const imgUrl = URL.createObjectURL(blob);
+        await new Promise<void>((resolve) => {
+          const img = new Image();
+          img.onload = () => { ctx.drawImage(img, pad, pad, artSize, artSize); URL.revokeObjectURL(imgUrl); resolve(); };
+          img.onerror = () => resolve();
+          img.src = imgUrl;
+        });
+      } catch { /* no art */ }
+    } else {
+      ctx.save();
+      ctx.fillStyle = overlayColor;
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(pad, pad, artSize, artSize);
+      ctx.restore();
+    }
+
+    // Track / artist / album
+    const infoX = pad + artSize + 16 * scale;
+    const infoMaxW = W - infoX - pad;
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = textColor;
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+    ctx.fillText(trackName, infoX, pad, infoMaxW);
+    ctx.font = `${smallSize}px ${fontFamily}`;
+    ctx.fillStyle = overlayColor;
+    ctx.fillText(artist, infoX, pad + fontSize * 1.5, infoMaxW);
+    if (albumName) ctx.fillText(albumName, infoX, pad + fontSize * 1.5 + smallSize * 1.6, infoMaxW);
+
+    // Divider
+    const divY = pad + headerH + lyricsTopPad * 0.5;
+    ctx.save();
+    ctx.strokeStyle = overlayColor;
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    ctx.moveTo(pad, divY);
+    ctx.lineTo(W - pad, divY);
+    ctx.stroke();
+    ctx.restore();
+
+    // Lyrics
+    const lyricsStartY = pad + headerH + lyricsTopPad;
+    ctx.font = `${fontSize}px ${fontFamily}`;
+    selectedLines.forEach((line, i) => {
+      const y = lyricsStartY + i * lineH;
+      ctx.save();
+      ctx.fillStyle = overlayColor;
+      ctx.globalAlpha = 0.35;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillText(String(lineNumbers[i]), pad + gutterW, y);
+      ctx.restore();
+      ctx.fillStyle = textColor;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(line || '', pad + gutterW + 8 * scale, y, W - pad - gutterW - 8 * scale - pad);
+    });
+
+    // Watermark
+    ctx.save();
+    ctx.fillStyle = overlayColor;
+    ctx.globalAlpha = 0.4;
+    ctx.font = `${smallSize}px ${fontFamily}`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('musilog.me', W - pad, H - pad * 0.5);
+    ctx.restore();
+
+    const link = document.createElement('a');
+    link.download = `lyrics-${artist}-${trackName}.png`.replace(/[^a-z0-9.-]/gi, '-').toLowerCase();
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }, [ytEmbed, lyrics, lyricSelection, albums, albumMetas]);
 
   const handleAutoNext = React.useCallback(() => {
     if (!ytEmbed) return;
@@ -809,10 +1013,38 @@ export default function Home() {
                     )}
                   </div>
                   <div className={styles.ytNavButtons}>
+                    <ActionButton
+                      isSelected={lyricsOpen}
+                      onClick={() => {
+                        const next = !lyricsOpen;
+                        setLyricsOpen(next);
+                        if (next && !lyrics && ytEmbed) {
+                          const sep = ytEmbed.title.indexOf(' — ');
+                          if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
+                        }
+                      }}
+                    >
+                      LYRICS
+                    </ActionButton>
                     <ActionButton hotkey="⊟" onClick={() => setYtMini(true)}>MINI</ActionButton>
                     <ActionButton hotkey="ESC" onClick={closeYtEmbed}>EXIT</ActionButton>
                   </div>
                 </div>
+                {lyricsOpen && (
+                  <div className={styles.lyricsPanel}>
+                    <LyricsContent lyrics={lyrics} loading={lyricsLoading} selection={lyricSelection} onLineClick={lyrics?.plain ? handleLyricLineClick : undefined} />
+                    {lyricSelection && (
+                      <div className={styles.lyricsExportRow}>
+                        <button className={styles.lyricsExportBtn} onClick={handleLyricsExport}>
+                          ↓ EXPORT {lyricSelection[1] - lyricSelection[0] + 1} LINE{lyricSelection[1] !== lyricSelection[0] ? 'S' : ''}
+                        </button>
+                        <button className={styles.lyricsExportBtn} onClick={() => { setLyricAnchor(null); setLyricSelection(null); }}>
+                          ✕ CLEAR
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card>
             ) : (
               <>
@@ -969,10 +1201,38 @@ export default function Home() {
                 )}
               </div>
               <div className={styles.ytNavButtons}>
+                <ActionButton
+                  isSelected={lyricsOpen}
+                  onClick={() => {
+                    const next = !lyricsOpen;
+                    setLyricsOpen(next);
+                    if (next && !lyrics && ytEmbed) {
+                      const sep = ytEmbed.title.indexOf(' — ');
+                      if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
+                    }
+                  }}
+                >
+                  LYRICS
+                </ActionButton>
                 <ActionButton hotkey="⊞" onClick={() => setYtMini(false)}>EXPAND</ActionButton>
                 <ActionButton hotkey="ESC" onClick={closeYtEmbed}>EXIT</ActionButton>
               </div>
             </div>
+            {lyricsOpen && (
+              <div className={styles.lyricsPanel}>
+                <LyricsContent lyrics={lyrics} loading={lyricsLoading} selection={lyricSelection} onLineClick={lyrics?.plain ? handleLyricLineClick : undefined} />
+                {lyricSelection && (
+                  <div className={styles.lyricsExportRow}>
+                    <button className={styles.lyricsExportBtn} onClick={handleLyricsExport}>
+                      ↓ EXPORT {lyricSelection[1] - lyricSelection[0] + 1} LINE{lyricSelection[1] !== lyricSelection[0] ? 'S' : ''}
+                    </button>
+                    <button className={styles.lyricsExportBtn} onClick={() => { setLyricAnchor(null); setLyricSelection(null); }}>
+                      ✕ CLEAR
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </Card>
         )}
         <div className={styles.sidebar}>

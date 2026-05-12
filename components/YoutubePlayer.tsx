@@ -6,6 +6,7 @@ import styles from './YoutubePlayer.module.css';
 export interface YoutubePlayerActions {
   pause: () => void;
   play: () => void;
+  getCurrentTime: () => number;
 }
 
 interface Props {
@@ -65,6 +66,7 @@ function YoutubePlayer({ videoId, onEnded, onPlayingChange, onPlayerReady }: Pro
             onPlayerReadyRef.current?.({
               pause: () => { try { e.target.pauseVideo(); } catch {} },
               play:  () => { try { e.target.playVideo();  } catch {} },
+              getCurrentTime: () => { try { return e.target.getCurrentTime() ?? 0; } catch { return 0; } },
             });
           },
           onStateChange: (e: { data: number }) => {

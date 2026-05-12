@@ -138,6 +138,85 @@
   gap: 1ch;
 }
 
+.lyricsPanel {
+  border-top: 1px solid var(--theme-border);
+  margin-top: calc(var(--theme-line-height-base) * 0.5rem);
+  padding-top: calc(var(--theme-line-height-base) * 0.5rem);
+}
+
+.lyricsScroll {
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.lyricsScroll::-webkit-scrollbar {
+  display: none;
+}
+
+
+.lyricLine {
+  display: flex;
+  gap: 2ch;
+  line-height: var(--theme-line-height-base);
+}
+
+.lyricLineNum {
+  flex-shrink: 0;
+  min-width: 3ch;
+  text-align: right;
+  opacity: 0.25;
+  user-select: none;
+}
+
+.lyricLineText {
+  flex: 1;
+  white-space: pre-wrap;
+}
+
+.lyricsStatus {
+  opacity: 0.5;
+  padding: calc(var(--theme-line-height-base) * 0.25rem) 0;
+}
+
+.lyricLineClickable {
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background 80ms ease;
+}
+
+.lyricLineClickable:hover {
+  background: var(--theme-focused-foreground);
+}
+
+.lyricLineSelected {
+  background: var(--theme-focused-foreground);
+  opacity: 1 !important;
+}
+
+.lyricsExportRow {
+  display: flex;
+  gap: 2ch;
+  padding-top: calc(var(--theme-line-height-base) * 0.5rem);
+}
+
+.lyricsExportBtn {
+  background: none;
+  border: none;
+  color: var(--theme-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.5;
+  letter-spacing: 1px;
+  transition: opacity 150ms ease;
+}
+
+.lyricsExportBtn:hover {
+  opacity: 1;
+}
+
 .ytEmbedWrapper {
   position: relative;
   width: 100%;
