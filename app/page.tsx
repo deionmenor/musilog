@@ -14,6 +14,7 @@ import AreaChart from '@components/AreaChart';
 import YoutubePlayer, { YoutubePlayerActions } from '@components/YoutubePlayer';
 import DateRangeModal from '@components/DateRangeModal';
 import RankMode from '@components/RankMode';
+import Lists from '@components/Lists';
 import Tooltip from '@components/Tooltip';
 import ASCII_BANNER from '@/lib/ascii';
 import { formatName } from '@/lib/formatName';
@@ -217,10 +218,17 @@ function formatCount(n: number): string {
 const APP_MODES = [
   { id: 'charts', label: 'CHARTS' },
   { id: 'rank', label: 'RANK MODE' },
+  { id: 'lists', label: 'LISTS' },
 ];
 
+const APP_MODE_LABELS: Record<string, string> = {
+  charts: 'CHARTS',
+  rank: 'RANK MODE',
+  lists: 'LISTS',
+};
+
 export default function Home() {
-  const [appMode, setAppMode] = React.useState<'charts' | 'rank'>('charts');
+  const [appMode, setAppMode] = React.useState<'charts' | 'rank' | 'lists'>('charts');
   const [theme, setTheme] = React.useState<Theme>('github');
   const [username, setUsername] = React.useState('');
   const [period, setPeriod] = React.useState<Period>('overall');
@@ -903,11 +911,12 @@ export default function Home() {
       ] : []}
       rightItems={[{ hotkey: '♥', body: 'SUPPORT', onClick: () => window.open('https://deionmenor.com', '_blank') }]}
     >
-      <ThemeDropdown label={appMode === 'rank' ? 'RANK MODE' : 'CHARTS'} items={APP_MODES} currentId={appMode} onSelect={(id) => setAppMode(id as 'charts' | 'rank')} />
+      <ThemeDropdown label={APP_MODE_LABELS[appMode] ?? 'CHARTS'} items={APP_MODES} currentId={appMode} onSelect={(id) => setAppMode(id as 'charts' | 'rank' | 'lists')} />
       <ThemeDropdown hotkey="◑" label="THEME" items={THEMES} currentId={theme} onSelect={(id) => setTheme(id as Theme)} />
     </ActionBar>
     <main className={styles.main}>
       {appMode === 'rank' && <RankMode />}
+      {appMode === 'lists' && <Lists />}
       {appMode === 'charts' && <>
       <div className={styles.banner}>
         <Card title="MUSILOG.FM">
