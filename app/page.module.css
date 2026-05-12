@@ -216,6 +216,32 @@
   white-space: nowrap;
 }
 
+.albumCardTitle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1ch;
+  width: 100%;
+}
+
+.albumSummary {
+  font-size: 0.8em;
+  color: var(--theme-overlay);
+  line-height: 1.5;
+  margin-top: 0.25rem;
+}
+
+.lastfmLink {
+  font-size: 0.75em;
+  color: var(--theme-overlay);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+}
+
+.lastfmLink:hover {
+  color: var(--theme-text);
+}
+
 .statsRow {
   display: flex;
   gap: 3ch;

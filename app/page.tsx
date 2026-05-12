@@ -161,6 +161,7 @@ interface AlbumMeta {
   listeners: number;
   playcount: number;
   tags: string[];
+  summary: string | null;
 }
 
 type ImageView = 'pixel' | 'original';
@@ -259,7 +260,7 @@ export default function Home() {
   }, [lockedAlbumIndex, hoveredAlbumIndex, albumMetas]);
 
   React.useEffect(() => {
-    setTracklistOpen(false);
+    setTracklistOpen(true);
   }, [lockedAlbumIndex, hoveredAlbumIndex]);
 
   const closeYtEmbed = React.useCallback(() => {
@@ -992,8 +993,14 @@ export default function Home() {
           const idx = activeIndex!;
           const pixels = pixelArtCache[idx];
 
+          const albumCardTitle = activeMeta?.tracks.length ? (
+            <ActionButton hotkey="▶" onClick={() => handleYtNavigate(idx, 0)}>
+              PLAY ALBUM
+            </ActionButton>
+          ) : 'ALBUM INFO';
+
           return (
-            <Card title="ALBUM INFO">
+            <Card title={albumCardTitle}>
               <div className={styles.sidebarContent}>
                 <div className={styles.albumHeader}>
                   {(activeAlbum.imageUrl || activeMeta?.artUrl) && (
@@ -1047,6 +1054,17 @@ export default function Home() {
                     {activeMeta.tags.slice(0, 3).length > 0 && (
                       <div className={styles.tags}>
                         {activeMeta.tags.slice(0, 3).join(' · ')}
+                      </div>
+                    )}
+
+                    {activeMeta.summary && (
+                      <div className={styles.albumSummary}>
+                        {activeMeta.summary.length > 150 ? activeMeta.summary.slice(0, 150).trimEnd() + '…' : activeMeta.summary}
+                        {activeAlbum.url && (
+                          <a href={activeAlbum.url} target="_blank" rel="noopener noreferrer" className={styles.lastfmLink}>
+                            {' '}↗ LAST.FM
+                          </a>
+                        )}
                       </div>
                     )}
 
