@@ -401,6 +401,15 @@
   flex-shrink: 0;
 }
 
+.scrobbleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--theme-green, #4ade80);
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
 .hotDot {
   flex-shrink: 0;
   width: 5px;

@@ -296,6 +296,7 @@ export default function Home() {
   const ytVideoCacheRef = React.useRef<Record<string, string>>({});
   const scrobbleStartRef = React.useRef<number>(0);
   const scrobbledRef = React.useRef(false);
+  const [scrobbled, setScrobbled] = React.useState(false);
   const elapsedRef = React.useRef(0);
   const playSegmentStartRef = React.useRef<number | null>(null);
   const scrobbleTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -341,6 +342,7 @@ export default function Home() {
   React.useEffect(() => {
     if (scrobbleTimerRef.current) { clearInterval(scrobbleTimerRef.current); scrobbleTimerRef.current = null; }
     scrobbledRef.current = false;
+    setScrobbled(false);
     elapsedRef.current = 0;
     playSegmentStartRef.current = null;
     scrobbleStartRef.current = Math.floor(Date.now() / 1000);
@@ -380,6 +382,7 @@ export default function Home() {
           const threshold = duration > 0 ? Math.min(240, Math.max(30, duration / 2)) : 30;
           if (totalElapsed >= threshold) {
             scrobbledRef.current = true;
+            setScrobbled(true);
             clearInterval(scrobbleTimerRef.current!);
             scrobbleTimerRef.current = null;
             const sep = ytEmbed.title.indexOf(' — ');
@@ -477,6 +480,7 @@ export default function Home() {
     setYtEmbed(null);
     setYtMini(false);
     setYtPlaying(false);
+    setScrobbled(false);
     setLyricsOpen(false);
     setLyrics(null);
     setLyricAnchor(null);
@@ -1132,7 +1136,16 @@ export default function Home() {
           const sep = ytEmbed.title.indexOf(' — ');
           const artist = sep !== -1 ? ytEmbed.title.slice(0, sep) : '';
           const track = sep !== -1 ? ytEmbed.title.slice(sep + 3) : ytEmbed.title;
-          return `${ytPlaying ? '♪' : '‖'} ${track} — ${artist}`;
+          return (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.75ch' }}>
+              {ytPlaying ? '♪' : '‖'} {track} — {artist}
+              {ytPlaying && !scrobbled && (
+                <Tooltip content="Scrobbling...">
+                  <span className={styles.scrobbleDot} />
+                </Tooltip>
+              )}
+            </span>
+          );
         }
         return sessionUsername ? `@${sessionUsername.toUpperCase()}` : undefined;
       })()}
