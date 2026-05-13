@@ -1138,12 +1138,14 @@ export default function Home() {
           const track = sep !== -1 ? ytEmbed.title.slice(sep + 3) : ytEmbed.title;
           return (
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.75ch' }}>
-              {ytPlaying ? '♪' : '‖'} {track} — {artist}
-              {ytPlaying && !scrobbled && (
-                <Tooltip content="Scrobbling...">
+              {ytPlaying && !scrobbled ? (
+                <Tooltip content="Scrobbling..." position="below">
                   <span className={styles.scrobbleDot} />
                 </Tooltip>
+              ) : (
+                ytPlaying ? '♪' : '‖'
               )}
+              {track} — {artist}
             </span>
           );
         }
