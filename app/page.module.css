@@ -410,6 +410,13 @@
   pointer-events: auto;
 }
 
+.scrobbleCheck {
+  color: var(--theme-green, #4ade80);
+  font-size: calc(var(--font-size) * 0.85);
+  line-height: 1;
+  flex-shrink: 0;
+}
+
 .hotDot {
   flex-shrink: 0;
   width: 5px;
