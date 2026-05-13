@@ -18,6 +18,8 @@ interface TrackTableProps {
   onPlay: (trackIdx: number, videoId: string) => void;
   showPlays?: boolean;
   headerVariant?: 'red' | 'green' | 'blue';
+  onRowClick?: (idx: number) => void;
+  selectedRow?: number;
 }
 
 function PlayButton({ artist, track, onPlay }: { artist: string; track: string; onPlay: (videoId: string) => void }) {
@@ -50,7 +52,7 @@ const HEADER_CLASS: Record<string, string> = {
   blue: tableStyles.headerBlue,
 };
 
-const TrackTable: React.FC<TrackTableProps> = ({ tracks, onPlay, showPlays = true, headerVariant }) => {
+const TrackTable: React.FC<TrackTableProps> = ({ tracks, onPlay, showPlays = true, headerVariant, onRowClick, selectedRow }) => {
   if (!tracks.length) return null;
   const tableClass = [tableStyles.root, headerVariant ? HEADER_CLASS[headerVariant] : undefined].filter(Boolean).join(' ');
 
@@ -70,8 +72,9 @@ const TrackTable: React.FC<TrackTableProps> = ({ tracks, onPlay, showPlays = tru
           {tracks.map((t, i) => (
             <tr
               key={i}
-              className={tableStyles.animateRow}
+              className={[tableStyles.animateRow, selectedRow === i ? tableStyles.selectedRow : '', onRowClick ? styles.clickableRow : ''].filter(Boolean).join(' ')}
               style={{ '--row-index': i } as React.CSSProperties}
+              onClick={onRowClick ? () => onRowClick(i) : undefined}
             >
               <td className={tableStyles.rankCell}>{t.rank}</td>
               <td>{formatName(t.name)}</td>

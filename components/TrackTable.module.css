@@ -25,3 +25,7 @@
 .playBtn:disabled {
   cursor: default;
 }
+
+.clickableRow {
+  cursor: pointer;
+}
