@@ -297,6 +297,7 @@ export default function Home() {
   const scrobbleStartRef = React.useRef<number>(0);
   const scrobbledRef = React.useRef(false);
   const [scrobbled, setScrobbled] = React.useState(false);
+  const [scrobbleProgress, setScrobbleProgress] = React.useState(0);
   const elapsedRef = React.useRef(0);
   const playSegmentStartRef = React.useRef<number | null>(null);
   const scrobbleTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -343,6 +344,7 @@ export default function Home() {
     if (scrobbleTimerRef.current) { clearInterval(scrobbleTimerRef.current); scrobbleTimerRef.current = null; }
     scrobbledRef.current = false;
     setScrobbled(false);
+    setScrobbleProgress(0);
     elapsedRef.current = 0;
     playSegmentStartRef.current = null;
     scrobbleStartRef.current = Math.floor(Date.now() / 1000);
@@ -380,6 +382,7 @@ export default function Home() {
           const totalElapsed = elapsedRef.current + segmentMs / 1000;
           const duration = ytPlayerActionsRef.current?.getDuration() ?? 0;
           const threshold = duration > 0 ? Math.min(240, Math.max(30, duration / 2)) : 30;
+          setScrobbleProgress(Math.min(1, totalElapsed / threshold));
           if (totalElapsed >= threshold) {
             scrobbledRef.current = true;
             setScrobbled(true);
@@ -481,6 +484,7 @@ export default function Home() {
     setYtMini(false);
     setYtPlaying(false);
     setScrobbled(false);
+    setScrobbleProgress(0);
     setLyricsOpen(false);
     setLyrics(null);
     setLyricAnchor(null);
@@ -1136,17 +1140,27 @@ export default function Home() {
           const sep = ytEmbed.title.indexOf(' — ');
           const artist = sep !== -1 ? ytEmbed.title.slice(0, sep) : '';
           const track = sep !== -1 ? ytEmbed.title.slice(sep + 3) : ytEmbed.title;
+          const ringR = 4.5;
+          const ringCirc = 2 * Math.PI * ringR;
+          const maxFill = 0.88;
+          const fill = ringCirc * Math.min(maxFill, scrobbleProgress);
           return (
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.75ch' }}>
-              {ytPlaying ? (
-                <>
-                  <Tooltip content={scrobbled ? 'Scrobbled' : 'Scrobbling...'} position="below">
-                    <span className={styles.scrobbleDot} />
-                  </Tooltip>
-                  {scrobbled && <span className={styles.scrobbleCheck}>✓</span>}
-                </>
-              ) : '‖'}
-              {track} — {artist}
+              <Tooltip content={scrobbled ? 'Scrobbled' : 'Scrobbling...'} position="below">
+                <svg width="12" height="12" viewBox="0 0 12 12" style={{ flexShrink: 0, pointerEvents: 'auto', opacity: ytPlaying ? 1 : 0.4 }}>
+                  <circle cx="6" cy="6" r={ringR} fill="none" stroke="var(--theme-green, #4ade80)" strokeWidth="1.5" opacity="0.2" />
+                  <circle
+                    cx="6" cy="6" r={ringR}
+                    fill="none"
+                    stroke="var(--theme-green, #4ade80)"
+                    strokeWidth="1.5"
+                    strokeDasharray={`${fill} ${ringCirc - fill}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 6 6)"
+                  />
+                </svg>
+              </Tooltip>
+              {!ytPlaying && '‖ '}{track} — {artist}
             </span>
           );
         }
