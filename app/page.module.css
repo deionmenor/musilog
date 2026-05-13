@@ -369,6 +369,29 @@
   opacity: 1;
 }
 
+.listenLaterBtn {
+  background: none;
+  border: none;
+  color: var(--theme-text);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size);
+  letter-spacing: 1px;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  opacity: 0.7;
+  transition: opacity 150ms ease;
+}
+
+.listenLaterBtn:hover {
+  opacity: 1;
+}
+
+.listenLaterBtn.saved {
+  opacity: 1;
+  color: var(--theme-green);
+}
+
 .sidebarTracks {
   display: flex;
   flex-direction: column;
@@ -402,6 +425,22 @@
 
 .sidebarTrackDur {
   color: var(--theme-overlay);
+  flex-shrink: 0;
+}
+
+.scrobbleDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--theme-green, #4ade80);
+  flex-shrink: 0;
+  pointer-events: auto;
+}
+
+.scrobbleCheck {
+  color: var(--theme-green, #4ade80);
+  font-size: calc(var(--font-size) * 0.85);
+  line-height: 1;
   flex-shrink: 0;
 }
 
