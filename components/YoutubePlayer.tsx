@@ -17,9 +17,35 @@ interface Props {
   onPlayerReady?: (actions: YoutubePlayerActions | null) => void;
 }
 
-// Singleton promise — only one <script> tag ever added
-let apiPromise: Promise<void> | null = null;
+// ─── Module-level singleton ───────────────────────────────────────────────────
+// Keeps the YT Player (and its iframe) alive across React unmount/remount cycles
+// so toggling full ↔ mini doesn't restart the video.
 
+let ytPlayer: any = null;
+let ytCurrentVideoId: string | null = null;
+
+// Module-level callback refs — updated by whichever instance is currently active
+const cbOnEnded: { current: (() => void) | undefined } = { current: undefined };
+const cbOnPlayingChange: { current: ((p: boolean) => void) | undefined } = { current: undefined };
+const cbOnPlayerReady: { current: ((a: YoutubePlayerActions | null) => void) | undefined } = { current: undefined };
+
+let holderEl: HTMLDivElement | null = null;
+function getHolder(): HTMLDivElement | null {
+  if (typeof document === 'undefined') return null;
+  if (!holderEl) {
+    holderEl = document.createElement('div');
+    holderEl.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;';
+    document.body.appendChild(holderEl);
+  }
+  return holderEl;
+}
+
+function getIframe(): HTMLIFrameElement | null {
+  try { return ytPlayer?.getIframe?.() ?? null; } catch { return null; }
+}
+
+// ─── Shared API promise ───────────────────────────────────────────────────────
+let apiPromise: Promise<void> | null = null;
 function loadYTApi(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('ssr'));
   if ((window as any).YT?.Player) return Promise.resolve();
@@ -37,34 +63,65 @@ function loadYTApi(): Promise<void> {
   return apiPromise;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 function YoutubePlayer({ videoId, onEnded, onPlayingChange, onPlayerReady }: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const playerRef = React.useRef<any>(null);
-  const onEndedRef = React.useRef(onEnded);
-  const onPlayingChangeRef = React.useRef(onPlayingChange);
-  const onPlayerReadyRef = React.useRef(onPlayerReady);
-  React.useEffect(() => { onEndedRef.current = onEnded; });
-  React.useEffect(() => { onPlayingChangeRef.current = onPlayingChange; });
-  React.useEffect(() => { onPlayerReadyRef.current = onPlayerReady; });
+
+  // Keep module-level callbacks in sync with whoever is currently mounted
+  React.useEffect(() => { cbOnEnded.current = onEnded; });
+  React.useEffect(() => { cbOnPlayingChange.current = onPlayingChange; });
+  React.useEffect(() => { cbOnPlayerReady.current = onPlayerReady; });
 
   React.useEffect(() => {
+    if (!containerRef.current) return;
+
+    if (ytPlayer && ytCurrentVideoId === videoId) {
+      // Same video already playing — just move the iframe into this container
+      const iframe = getIframe();
+      if (iframe) {
+        containerRef.current.innerHTML = '';
+        containerRef.current.appendChild(iframe);
+      }
+      const actions: YoutubePlayerActions = {
+        pause: () => { try { ytPlayer.pauseVideo(); } catch {} },
+        play:  () => { try { ytPlayer.playVideo();  } catch {} },
+        getCurrentTime: () => { try { return ytPlayer.getCurrentTime() ?? 0; } catch { return 0; } },
+      };
+      cbOnPlayerReady.current?.(actions);
+
+      return () => {
+        cbOnPlayerReady.current?.(null);
+        const iframe = getIframe();
+        const holder = getHolder();
+        if (iframe && holder) holder.appendChild(iframe);
+      };
+    }
+
+    // New video — (re)create the player
     let cancelled = false;
+
+    // Park existing iframe in the holder before destroying
+    const oldIframe = getIframe();
+    if (oldIframe) getHolder()?.appendChild(oldIframe);
+    try { ytPlayer?.destroy(); } catch {}
+    ytPlayer = null;
+    ytCurrentVideoId = null;
 
     loadYTApi().then(() => {
       if (cancelled || !containerRef.current) return;
-
       containerRef.current.innerHTML = '';
       const target = document.createElement('div');
       containerRef.current.appendChild(target);
 
-      playerRef.current = new (window as any).YT.Player(target, {
+      ytPlayer = new (window as any).YT.Player(target, {
         videoId,
         width: '100%',
         height: '100%',
         playerVars: { autoplay: 1, rel: 0, modestbranding: 1, controls: 0, showinfo: 0, iv_load_policy: 3 },
         events: {
           onReady: (e: { target: any }) => {
-            onPlayerReadyRef.current?.({
+            ytCurrentVideoId = videoId;
+            cbOnPlayerReady.current?.({
               pause: () => { try { e.target.pauseVideo(); } catch {} },
               play:  () => { try { e.target.playVideo();  } catch {} },
               getCurrentTime: () => { try { return e.target.getCurrentTime() ?? 0; } catch { return 0; } },
@@ -72,8 +129,8 @@ function YoutubePlayer({ videoId, onEnded, onPlayingChange, onPlayerReady }: Pro
             });
           },
           onStateChange: (e: { data: number }) => {
-            if (e.data === 0) onEndedRef.current?.();
-            onPlayingChangeRef.current?.(e.data === 1);
+            if (e.data === 0) cbOnEnded.current?.();
+            cbOnPlayingChange.current?.(e.data === 1);
           },
         },
       });
@@ -81,9 +138,10 @@ function YoutubePlayer({ videoId, onEnded, onPlayingChange, onPlayerReady }: Pro
 
     return () => {
       cancelled = true;
-      onPlayerReadyRef.current?.(null);
-      try { playerRef.current?.destroy(); } catch {}
-      playerRef.current = null;
+      cbOnPlayerReady.current?.(null);
+      const iframe = getIframe();
+      const holder = getHolder();
+      if (iframe && holder) holder.appendChild(iframe);
     };
   }, [videoId]);
 

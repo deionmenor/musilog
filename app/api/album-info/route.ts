@@ -103,6 +103,9 @@ export async function GET(request: NextRequest) {
 
   const totalDuration = tracks.reduce((sum, t) => sum + t.duration, 0);
 
+  const rawSummary: string = a.wiki?.summary ?? '';
+  const summary = rawSummary.replace(/<a\b[^>]*>.*?<\/a>/gi, '').replace(/<[^>]+>/g, '').trim() || null;
+
   return NextResponse.json({
     artUrl: mbData.artUrl,
     releaseDate: mbData.releaseDate,
@@ -111,5 +114,6 @@ export async function GET(request: NextRequest) {
     listeners: parseInt(a.listeners, 10) || 0,
     playcount: parseInt(a.playcount, 10) || 0,
     tags,
+    summary,
   });
 }

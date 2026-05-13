@@ -189,6 +189,23 @@ function TrackYtButton({ artist, track, onPlay }: { artist: string; track: strin
 }
 
 
+interface ArtistMeta {
+  name: string;
+  url: string | null;
+  listeners: number;
+  playcount: number;
+  summary: string | null;
+  topTracks: { rank: number; name: string; playcount: number; url: string }[];
+}
+
+interface TrackMeta {
+  album: { name: string; artist: string; url: string } | null;
+  listeners: number;
+  playcount: number;
+  summary: string | null;
+  url: string | null;
+}
+
 interface AlbumMeta {
   artUrl: string | null;
   releaseDate: string | null;
@@ -197,6 +214,7 @@ interface AlbumMeta {
   listeners: number;
   playcount: number;
   tags: string[];
+  summary: string | null;
 }
 
 type ImageView = 'pixel' | 'original';
@@ -294,6 +312,16 @@ export default function Home() {
   const [ytNavLoading, setYtNavLoading] = React.useState(false);
   const ytPlayerActionsRef = React.useRef<YoutubePlayerActions | null>(null);
   const ytVideoCacheRef = React.useRef<Record<string, string>>({});
+  const [selectedArtistIndex, setSelectedArtistIndex] = React.useState<number | null>(null);
+  const [artistMeta, setArtistMeta] = React.useState<ArtistMeta | null>(null);
+  const [artistMetaLoading, setArtistMetaLoading] = React.useState(false);
+  const [selectedTrackIndex, setSelectedTrackIndex] = React.useState<number | null>(null);
+  const [trackMeta, setTrackMeta] = React.useState<TrackMeta | null>(null);
+  const [trackMetaLoading, setTrackMetaLoading] = React.useState(false);
+  const [showTrackAlbum, setShowTrackAlbum] = React.useState(false);
+  const [trackAlbumMeta, setTrackAlbumMeta] = React.useState<AlbumMeta | null>(null);
+  const [trackAlbumLoading, setTrackAlbumLoading] = React.useState(false);
+  const [trackAlbumTracklistOpen, setTrackAlbumTracklistOpen] = React.useState(true);
   const scrobbleStartRef = React.useRef<number>(0);
   const scrobbledRef = React.useRef(false);
   const [scrobbled, setScrobbled] = React.useState(false);
@@ -437,7 +465,7 @@ export default function Home() {
   }, [lockedAlbumIndex, hoveredAlbumIndex, albumMetas]);
 
   React.useEffect(() => {
-    setTracklistOpen(false);
+    setTracklistOpen(true);
   }, [lockedAlbumIndex, hoveredAlbumIndex]);
 
   // Lazy-fetch album meta for hovered/locked LL item
@@ -720,6 +748,12 @@ export default function Home() {
     setNowPlayingLoading(false);
     setHoveredAlbumIndex(null);
     setLockedAlbumIndex(null);
+    setSelectedArtistIndex(null);
+    setArtistMeta(null);
+    setSelectedTrackIndex(null);
+    setTrackMeta(null);
+    setShowTrackAlbum(false);
+    setTrackAlbumMeta(null);
     if (!ytMini) setYtEmbed(null);
     const start = Date.now();
     try {
@@ -837,6 +871,49 @@ export default function Home() {
   const handleAlbumLeave = () => {
     if (lockedAlbumIndex !== null) return;
     leaveTimer.current = setTimeout(() => setHoveredAlbumIndex(null), 300);
+  };
+
+  const handleArtistSelect = async (idx: number) => {
+    if (selectedArtistIndex === idx) { setSelectedArtistIndex(null); setArtistMeta(null); return; }
+    setSelectedArtistIndex(idx);
+    setArtistMeta(null);
+    setArtistMetaLoading(true);
+    const a = artists[idx];
+    try {
+      const res = await fetch(`/api/artist-info?artist=${encodeURIComponent(a.name)}`);
+      if (res.ok) setArtistMeta(await res.json());
+    } finally {
+      setArtistMetaLoading(false);
+    }
+  };
+
+  const handleTrackSelect = async (idx: number) => {
+    if (selectedTrackIndex === idx) { setSelectedTrackIndex(null); setTrackMeta(null); return; }
+    setSelectedTrackIndex(idx);
+    setShowTrackAlbum(false);
+    setTrackAlbumMeta(null);
+    setTrackMeta(null);
+    setTrackMetaLoading(true);
+    const t = tracks[idx];
+    try {
+      const res = await fetch(`/api/track-info?artist=${encodeURIComponent(t.artist)}&track=${encodeURIComponent(t.name)}`);
+      if (res.ok) setTrackMeta(await res.json());
+    } finally {
+      setTrackMetaLoading(false);
+    }
+  };
+
+  const handleViewTrackAlbum = async (albumName: string, albumArtist: string) => {
+    setShowTrackAlbum(true);
+    setTrackAlbumMeta(null);
+    setTrackAlbumLoading(true);
+    setTrackAlbumTracklistOpen(true);
+    try {
+      const res = await fetch(`/api/album-info?artist=${encodeURIComponent(albumArtist)}&album=${encodeURIComponent(albumName)}`);
+      if (res.ok) setTrackAlbumMeta(await res.json());
+    } finally {
+      setTrackAlbumLoading(false);
+    }
   };
 
   const handleAlbumClick = (index: number) => {
@@ -1563,89 +1640,9 @@ export default function Home() {
           </Card>
         )}
 
-        {hasResults && (
+        {hasResults && (!ytEmbed || ytMini) && (
           <>
-            {ytEmbed && !ytMini ? (
-              <Card title={ytEmbed.title}>
-                <div className={styles.ytEmbedWrapper}>
-                  <YoutubePlayer videoId={ytEmbed.videoId} onEnded={handleAutoNext} onPlayingChange={setYtPlaying} onPlayerReady={(a) => { ytPlayerActionsRef.current = a; }} />
-                </div>
-                <div className={styles.ytControls}>
-                  <div className={styles.ytNavButtons}>
-                    {ytEmbed.source === 'tracks' ? (
-                      <>
-                        {ytEmbed.trackIdx > 0 && (
-                          <ActionButton hotkey="←" onClick={() => handleTrackNavigate(ytEmbed.trackIdx - 1)}>
-                            {ytNavLoading ? '...' : 'PREV'}
-                          </ActionButton>
-                        )}
-                        {tracks[ytEmbed.trackIdx + 1] && (
-                          <ActionButton hotkey="→" onClick={() => handleTrackNavigate(ytEmbed.trackIdx + 1)}>
-                            {ytNavLoading ? '...' : 'NEXT'}
-                          </ActionButton>
-                        )}
-                      </>
-                    ) : (() => {
-                      const isLL = ytEmbed.source === 'listen-later';
-                      const llItem = isLL ? listenLaterItems[ytEmbed.albumIdx] : null;
-                      const llMetaKey = llItem ? `${llItem.artist}|||${llItem.album}` : null;
-                      const llMeta = llMetaKey ? llAlbumMetas[llMetaKey] : null;
-                      const hasNext = isLL
-                        ? !!llMeta?.tracks[ytEmbed.trackIdx + 1]
-                        : !!albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1];
-                      return (
-                        <>
-                          {ytEmbed.trackIdx > 0 && (
-                            <ActionButton hotkey="←" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
-                              {ytNavLoading ? '...' : 'PREV'}
-                            </ActionButton>
-                          )}
-                          {hasNext && (
-                            <ActionButton hotkey="→" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
-                              {ytNavLoading ? '...' : 'NEXT'}
-                            </ActionButton>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                  <div className={styles.ytNavButtons}>
-                    <ActionButton
-                      isSelected={lyricsOpen}
-                      onClick={() => {
-                        const next = !lyricsOpen;
-                        setLyricsOpen(next);
-                        if (next && !lyrics && ytEmbed) {
-                          const sep = ytEmbed.title.indexOf(' — ');
-                          if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
-                        }
-                      }}
-                    >
-                      LYRICS
-                    </ActionButton>
-                    <ActionButton hotkey="⊟" onClick={() => setYtMini(true)}>MINI</ActionButton>
-                    <ActionButton hotkey="ESC" onClick={closeYtEmbed}>EXIT</ActionButton>
-                  </div>
-                </div>
-                {lyricsOpen && (
-                  <div className={styles.lyricsPanel}>
-                    <LyricsContent lyrics={lyrics} loading={lyricsLoading} selection={lyricSelection} onLineClick={lyrics?.plain ? handleLyricLineClick : undefined} />
-                    {lyricSelection && (
-                      <div className={styles.lyricsExportRow}>
-                        <button className={styles.lyricsExportBtn} onClick={handleLyricsExport}>
-                          ↓ EXPORT {lyricSelection[1] - lyricSelection[0] + 1} LINE{lyricSelection[1] !== lyricSelection[0] ? 'S' : ''}
-                        </button>
-                        <button className={styles.lyricsExportBtn} onClick={() => { setLyricAnchor(null); setLyricSelection(null); }}>
-                          ✕ CLEAR
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </Card>
-            ) : (
-              <>
-              <div className={styles.results} ref={resultsRef}>
+          <div className={styles.results} ref={resultsRef}>
                 <Card title={resultTitle}>
                   {neighbors.length > 0 ? (
                     <NeighborTable
@@ -1660,6 +1657,8 @@ export default function Home() {
                       onPlay={handleTrackPlay}
                       showPlays={showPlays}
                       headerVariant="blue"
+                      onRowClick={handleTrackSelect}
+                      selectedRow={selectedTrackIndex ?? undefined}
                     />
                   ) : userStats ? (
                     <>
@@ -1708,9 +1707,9 @@ export default function Home() {
                       animate
                       headerVariant={albums.length > 0 ? 'red' : artists.length > 0 ? 'green' : undefined}
                       onRowHover={albums.length > 0 ? handleAlbumHover : undefined}
-                      onRowClick={albums.length > 0 ? handleAlbumClick : undefined}
+                      onRowClick={albums.length > 0 ? handleAlbumClick : artists.length > 0 ? handleArtistSelect : undefined}
                       onTableLeave={albums.length > 0 ? handleAlbumLeave : undefined}
-                      selectedRow={lockedAlbumIndex ?? hoveredAlbumIndex ?? undefined}
+                      selectedRow={lockedAlbumIndex ?? hoveredAlbumIndex ?? selectedArtistIndex ?? undefined}
                     />
                   )}
                 </Card>
@@ -1755,9 +1754,77 @@ export default function Home() {
                   {`MORE ${lastFetched.mode === 'albums' ? 'ALBUMS' : lastFetched.mode === 'tracks' ? 'SONGS' : 'ARTISTS'}`}
                 </ActionButton>
               )}
-              </>
-            )}
           </>
+        )}
+        {ytEmbed && !ytMini && (
+          <Card title={ytEmbed.title}>
+            <div className={styles.ytEmbedWrapper}>
+              <YoutubePlayer videoId={ytEmbed.videoId} onEnded={handleAutoNext} onPlayingChange={setYtPlaying} onPlayerReady={(a) => { ytPlayerActionsRef.current = a; }} />
+            </div>
+            <div className={styles.ytControls}>
+              <div className={styles.ytNavButtons}>
+                {ytEmbed.source === 'tracks' ? (
+                  <>
+                    {ytEmbed.trackIdx > 0 && (
+                      <ActionButton hotkey="←" onClick={() => handleTrackNavigate(ytEmbed.trackIdx - 1)}>
+                        {ytNavLoading ? '...' : 'PREV'}
+                      </ActionButton>
+                    )}
+                    {tracks[ytEmbed.trackIdx + 1] && (
+                      <ActionButton hotkey="→" onClick={() => handleTrackNavigate(ytEmbed.trackIdx + 1)}>
+                        {ytNavLoading ? '...' : 'NEXT'}
+                      </ActionButton>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {ytEmbed.trackIdx > 0 && (
+                      <ActionButton hotkey="←" onClick={() => handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
+                        {ytNavLoading ? '...' : 'PREV'}
+                      </ActionButton>
+                    )}
+                    {albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1] && (
+                      <ActionButton hotkey="→" onClick={() => handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
+                        {ytNavLoading ? '...' : 'NEXT'}
+                      </ActionButton>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className={styles.ytNavButtons}>
+                <ActionButton
+                  isSelected={lyricsOpen}
+                  onClick={() => {
+                    const next = !lyricsOpen;
+                    setLyricsOpen(next);
+                    if (next && !lyrics && ytEmbed) {
+                      const sep = ytEmbed.title.indexOf(' — ');
+                      if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
+                    }
+                  }}
+                >
+                  LYRICS
+                </ActionButton>
+                <ActionButton hotkey="⊟" onClick={() => setYtMini(true)}>MINI</ActionButton>
+                <ActionButton hotkey="ESC" onClick={closeYtEmbed}>EXIT</ActionButton>
+              </div>
+            </div>
+            {lyricsOpen && (
+              <div className={styles.lyricsPanel}>
+                <LyricsContent lyrics={lyrics} loading={lyricsLoading} selection={lyricSelection} onLineClick={lyrics?.plain ? handleLyricLineClick : undefined} />
+                {lyricSelection && (
+                  <div className={styles.lyricsExportRow}>
+                    <button className={styles.lyricsExportBtn} onClick={handleLyricsExport}>
+                      ↓ EXPORT {lyricSelection[1] - lyricSelection[0] + 1} LINE{lyricSelection[1] !== lyricSelection[0] ? 'S' : ''}
+                    </button>
+                    <button className={styles.lyricsExportBtn} onClick={() => { setLyricAnchor(null); setLyricSelection(null); }}>
+                      ✕ CLEAR
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
         )}
       </div>
 
@@ -1765,7 +1832,7 @@ export default function Home() {
         {ytEmbed && ytMini && (
           <Card title={ytEmbed.title}>
             <div className={styles.ytEmbedWrapper}>
-              <YoutubePlayer videoId={ytEmbed.videoId} onEnded={handleAutoNext} />
+              <YoutubePlayer videoId={ytEmbed.videoId} onEnded={handleAutoNext} onPlayingChange={setYtPlaying} onPlayerReady={(a) => { ytPlayerActionsRef.current = a; }} />
             </div>
             <div className={styles.ytControls}>
               <div className={styles.ytNavButtons}>
@@ -1843,6 +1910,214 @@ export default function Home() {
         )}
         <div className={styles.sidebar}>
         {(() => {
+          // Artist info sidebar (artists mode)
+          if (artists.length > 0 && selectedArtistIndex !== null) {
+            const selArtist = artists[selectedArtistIndex];
+            return (
+              <Card title="ARTIST INFO">
+                <div className={styles.sidebarContent}>
+                  <div className={styles.albumHeader}>
+                    <div className={styles.albumHeaderInfo}>
+                      <div className={styles.albumTitle}>{formatName(selArtist.name)}</div>
+                    </div>
+                  </div>
+                  {artistMetaLoading && !artistMeta && <div className={styles.sidebarLoading}>LOADING...</div>}
+                  {artistMeta && (
+                    <>
+                      <div className={styles.statsRow}>
+                        <div className={styles.statItem}>
+                          <span className={styles.statValue}>{formatCount(artistMeta.listeners)}</span>
+                          <span className={styles.statLabel}>◉</span>
+                        </div>
+                        <div className={styles.statItem}>
+                          <span className={styles.statValue}>{formatCount(artistMeta.playcount)}</span>
+                          <span className={styles.statLabel}>↺</span>
+                        </div>
+                      </div>
+                      {artistMeta.summary && (
+                        <div className={styles.albumSummary}>
+                          {artistMeta.summary.length > 150 ? artistMeta.summary.slice(0, 150).trimEnd() + '…' : artistMeta.summary}
+                          {artistMeta.url && (
+                            <a href={artistMeta.url} target="_blank" rel="noopener noreferrer" className={styles.lastfmLink}>
+                              {' '}↗ LAST.FM
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {artistMeta.topTracks.length > 0 && (
+                        <div className={styles.tracklistSection}>
+                          <div className={styles.tracklistToggle}>▼ TOP TRACKS</div>
+                          <div className={styles.sidebarTracks}>
+                            {artistMeta.topTracks.map((t) => (
+                              <div key={t.rank} className={styles.sidebarTrack}>
+                                <span className={styles.sidebarTrackNum}>{t.rank}.</span>
+                                <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
+                                <span className={styles.sidebarTrackDur}>{formatCount(t.playcount)}</span>
+                                <TrackYtButton
+                                  artist={selArtist.name}
+                                  track={t.name}
+                                  onPlay={(videoId) => setYtEmbed({ videoId, title: `${selArtist.name} — ${t.name}`, source: 'tracks', albumIdx: -1, trackIdx: -1 })}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </Card>
+            );
+          }
+
+          // Song info sidebar (tracks mode)
+          if (tracks.length > 0 && selectedTrackIndex !== null) {
+            const selTrack = tracks[selectedTrackIndex];
+
+            if (showTrackAlbum && trackMeta?.album) {
+              const ta = trackMeta.album;
+              const trackAlbumCardTitle = (
+                <div className={styles.albumCardTitle}>
+                  <ActionButton onClick={() => setShowTrackAlbum(false)}>← BACK</ActionButton>
+                  {trackAlbumMeta?.tracks.length ? (
+                    <ActionButton hotkey="▶" onClick={async () => {
+                      const first = trackAlbumMeta.tracks[0];
+                      const res = await fetch(`/api/yt-link?artist=${encodeURIComponent(ta.artist)}&track=${encodeURIComponent(first.name)}`);
+                      const d = await res.json();
+                      if (d.videoId) setYtEmbed({ videoId: d.videoId, title: `${ta.artist} — ${first.name}`, source: 'album', albumIdx: -1, trackIdx: 0 });
+                    }}>PLAY ALBUM</ActionButton>
+                  ) : null}
+                </div>
+              );
+
+              return (
+                <Card title={trackAlbumCardTitle}>
+                  <div className={styles.sidebarContent}>
+                    {trackAlbumMeta?.artUrl && (
+                      <div className={styles.albumHeader}>
+                        <div className={styles.albumThumb}>
+                          <img src={trackAlbumMeta.artUrl} alt={ta.name} className={styles.thumbImg} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        </div>
+                        <div className={styles.albumHeaderInfo}>
+                          <div className={styles.albumTitle}>{formatName(ta.name)}</div>
+                          <div className={styles.albumSubtitle}>{ta.artist}</div>
+                          {ta.url && <a href={ta.url} target="_blank" rel="noopener noreferrer" className={styles.lastfmLink}>↗ LAST.FM</a>}
+                        </div>
+                      </div>
+                    )}
+                    {trackAlbumLoading && !trackAlbumMeta && <div className={styles.sidebarLoading}>LOADING...</div>}
+                    {trackAlbumMeta && (
+                      <>
+                        <div className={styles.statsRow}>
+                          {trackAlbumMeta.releaseDate && (
+                            <div className={styles.statItem}>
+                              <span className={styles.statValue}>{trackAlbumMeta.releaseDate.slice(0, 4)}</span>
+                              <span className={styles.statLabel}>◈</span>
+                            </div>
+                          )}
+                          <div className={styles.statItem}>
+                            <span className={styles.statValue}>{formatDuration(trackAlbumMeta.totalDuration)}</span>
+                            <span className={styles.statLabel}>◷</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <span className={styles.statValue}>{formatCount(trackAlbumMeta.listeners)}</span>
+                            <span className={styles.statLabel}>◉</span>
+                          </div>
+                          <div className={styles.statItem}>
+                            <span className={styles.statValue}>{formatCount(trackAlbumMeta.playcount)}</span>
+                            <span className={styles.statLabel}>↺</span>
+                          </div>
+                        </div>
+                        {trackAlbumMeta.tags.slice(0, 3).length > 0 && (
+                          <div className={styles.tags}>{trackAlbumMeta.tags.slice(0, 3).join(' · ')}</div>
+                        )}
+                        {trackAlbumMeta.summary && (
+                          <div className={styles.albumSummary}>
+                            {trackAlbumMeta.summary.length > 150 ? trackAlbumMeta.summary.slice(0, 150).trimEnd() + '…' : trackAlbumMeta.summary}
+                          </div>
+                        )}
+                        {trackAlbumMeta.tracks.length > 0 && (
+                          <div className={styles.tracklistSection}>
+                            <button className={styles.tracklistToggle} onClick={() => setTrackAlbumTracklistOpen((o) => !o)}>
+                              {trackAlbumTracklistOpen ? '▼' : '▶'} TRACKLIST
+                            </button>
+                            {trackAlbumTracklistOpen && (
+                              <div className={styles.sidebarTracks}>
+                                {trackAlbumMeta.tracks.map((t, tIdx) => (
+                                  <div key={t.rank} className={styles.sidebarTrack}>
+                                    <span className={styles.sidebarTrackNum}>{t.rank}.</span>
+                                    <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
+                                    {t.duration > 0 && (
+                                      <span className={styles.sidebarTrackDur}>
+                                        {Math.floor(t.duration / 60)}:{String(t.duration % 60).padStart(2, '0')}
+                                      </span>
+                                    )}
+                                    <TrackYtButton
+                                      artist={ta.artist}
+                                      track={t.name}
+                                      onPlay={(videoId) => setYtEmbed({ videoId, title: `${ta.artist} — ${t.name}`, source: 'album', albumIdx: -1, trackIdx: tIdx })}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </Card>
+              );
+            }
+
+            // Song info card
+            return (
+              <Card title="SONG INFO">
+                <div className={styles.sidebarContent}>
+                  <div className={styles.albumHeader}>
+                    <div className={styles.albumHeaderInfo}>
+                      <div className={styles.albumTitle}>{formatName(selTrack.name)}</div>
+                      <div className={styles.albumSubtitle}>{selTrack.artist}</div>
+                    </div>
+                  </div>
+                  {trackMetaLoading && !trackMeta && <div className={styles.sidebarLoading}>LOADING...</div>}
+                  {trackMeta && (
+                    <>
+                      <div className={styles.statsRow}>
+                        <div className={styles.statItem}>
+                          <span className={styles.statValue}>{formatCount(trackMeta.listeners)}</span>
+                          <span className={styles.statLabel}>◉</span>
+                        </div>
+                        <div className={styles.statItem}>
+                          <span className={styles.statValue}>{formatCount(trackMeta.playcount)}</span>
+                          <span className={styles.statLabel}>↺</span>
+                        </div>
+                      </div>
+                      {trackMeta.summary && (
+                        <div className={styles.albumSummary}>
+                          {trackMeta.summary.length > 150 ? trackMeta.summary.slice(0, 150).trimEnd() + '…' : trackMeta.summary}
+                          {trackMeta.url && (
+                            <a href={trackMeta.url} target="_blank" rel="noopener noreferrer" className={styles.lastfmLink}>
+                              {' '}↗ LAST.FM
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {trackMeta.album && (
+                        <ActionButton
+                          onClick={() => handleViewTrackAlbum(trackMeta.album!.name, trackMeta.album!.artist)}
+                          rootStyle={{ alignSelf: 'flex-start', marginTop: '0.5rem' }}
+                        >
+                          → {formatName(trackMeta.album.name)}
+                        </ActionButton>
+                      )}
+                    </>
+                  )}
+                </div>
+              </Card>
+            );
+          }
+
           const activeIndex = lockedAlbumIndex ?? hoveredAlbumIndex;
           const activeAlbum = activeIndex !== null ? albums[activeIndex] : null;
           const activeMeta = activeIndex !== null ? albumMetas[activeIndex] ?? null : null;
@@ -1859,8 +2134,14 @@ export default function Home() {
           const idx = activeIndex!;
           const pixels = pixelArtCache[idx];
 
+          const albumCardTitle = activeMeta?.tracks.length ? (
+            <ActionButton hotkey="▶" onClick={() => handleYtNavigate(idx, 0)}>
+              PLAY ALBUM
+            </ActionButton>
+          ) : 'ALBUM INFO';
+
           return (
-            <Card title="ALBUM INFO">
+            <Card title={albumCardTitle}>
               <div className={styles.sidebarContent}>
                 <div className={styles.albumHeader}>
                   {(activeAlbum.imageUrl || activeMeta?.artUrl) && (
@@ -1935,6 +2216,17 @@ export default function Home() {
                     {activeMeta.tags.slice(0, 3).length > 0 && (
                       <div className={styles.tags}>
                         {activeMeta.tags.slice(0, 3).join(' · ')}
+                      </div>
+                    )}
+
+                    {activeMeta.summary && (
+                      <div className={styles.albumSummary}>
+                        {activeMeta.summary.length > 150 ? activeMeta.summary.slice(0, 150).trimEnd() + '…' : activeMeta.summary}
+                        {activeAlbum.url && (
+                          <a href={activeAlbum.url} target="_blank" rel="noopener noreferrer" className={styles.lastfmLink}>
+                            {' '}↗ LAST.FM
+                          </a>
+                        )}
                       </div>
                     )}
 
