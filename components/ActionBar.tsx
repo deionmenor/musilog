@@ -15,16 +15,18 @@ interface ActionBarItem {
 interface ActionBarProps {
   items?: ActionBarItem[];
   rightItems?: ActionBarItem[];
+  center?: React.ReactNode;
   children?: React.ReactNode;
 }
 
-const ActionBar: React.FC<ActionBarProps> = ({ items, rightItems, children }) => {
+const ActionBar: React.FC<ActionBarProps> = ({ items, rightItems, center, children }) => {
   return (
     <div className={styles.root}>
       <div className={styles.left}>
         {children}
         {items && items.length > 0 && <ButtonGroup items={items} />}
       </div>
+      {center && <div className={styles.center}>{center}</div>}
       {rightItems && rightItems.length > 0 && (
         <div className={styles.right}>
           <ButtonGroup items={rightItems} />
