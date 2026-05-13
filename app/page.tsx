@@ -220,14 +220,40 @@ const APP_MODES = [
 ];
 
 export default function Home() {
-  const [appMode, setAppMode] = React.useState<'charts' | 'rank'>('charts');
+  const [appMode, setAppMode] = React.useState<'charts' | 'rank' | 'listen-later'>('charts');
   const [theme, setTheme] = React.useState<Theme>('github');
   const [username, setUsername] = React.useState('');
   const [period, setPeriod] = React.useState<Period>('overall');
+  const [sessionUsername, setSessionUsername] = React.useState<string | null>(null);
+  const [listenLaterSet, setListenLaterSet] = React.useState<Set<string>>(new Set());
+  const [listenLaterItems, setListenLaterItems] = React.useState<{ artist: string; album: string; added_at: string }[]>([]);
 
   React.useEffect(() => {
-    const saved = localStorage.getItem('lastfm-username');
-    if (saved) setUsername(saved);
+    fetch('/api/auth/session')
+      .then((r) => r.json())
+      .then((data: { loggedIn: boolean; username: string | null }) => {
+        if (data.loggedIn && data.username) {
+          setSessionUsername(data.username);
+          setUsername(data.username);
+          localStorage.setItem('lastfm-username', data.username);
+          fetch('/api/listen-later')
+            .then((r) => r.json())
+            .then((d: { items?: { artist: string; album: string; added_at: string }[] }) => {
+              if (d.items) {
+                setListenLaterItems(d.items);
+                setListenLaterSet(new Set(d.items.map((i) => `${i.artist}|||${i.album}`)));
+              }
+            })
+            .catch(() => {});
+        } else {
+          const saved = localStorage.getItem('lastfm-username');
+          if (saved) setUsername(saved);
+        }
+      })
+      .catch(() => {
+        const saved = localStorage.getItem('lastfm-username');
+        if (saved) setUsername(saved);
+      });
   }, []);
   const [customDateRange, setCustomDateRange] = React.useState<{ from: string; to: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -262,12 +288,17 @@ export default function Home() {
   const [pixelArtCache, setPixelArtCache] = React.useState<Record<number, string[] | null>>({});
   const [pixelLoading, setPixelLoading] = React.useState(false);
   const pixelFetchedRef = React.useRef<Set<number>>(new Set());
-  const [ytEmbed, setYtEmbed] = React.useState<{ videoId: string; title: string; source: 'album' | 'tracks'; albumIdx: number; trackIdx: number } | null>(null);
+  const [ytEmbed, setYtEmbed] = React.useState<{ videoId: string; title: string; source: 'album' | 'tracks' | 'listen-later'; albumIdx: number; trackIdx: number } | null>(null);
   const [ytMini, setYtMini] = React.useState(false);
   const [ytPlaying, setYtPlaying] = React.useState(false);
   const [ytNavLoading, setYtNavLoading] = React.useState(false);
   const ytPlayerActionsRef = React.useRef<YoutubePlayerActions | null>(null);
   const ytVideoCacheRef = React.useRef<Record<string, string>>({});
+  const scrobbleStartRef = React.useRef<number>(0);
+  const scrobbledRef = React.useRef(false);
+  const elapsedRef = React.useRef(0);
+  const playSegmentStartRef = React.useRef<number | null>(null);
+  const scrobbleTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [lyricsOpen, setLyricsOpen] = React.useState(false);
   const [lyrics, setLyrics] = React.useState<{ plain: string | null; instrumental: boolean } | null>(null);
   const [lyricsLoading, setLyricsLoading] = React.useState(false);
@@ -277,11 +308,110 @@ export default function Home() {
   const resultsRef = React.useRef<HTMLDivElement>(null);
   const leaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [llHoveredIdx, setLlHoveredIdx] = React.useState<number | null>(null);
+  const [llLockedIdx, setLlLockedIdx] = React.useState<number | null>(null);
+  const [llAlbumMetas, setLlAlbumMetas] = React.useState<Record<string, AlbumMeta | null>>({});
+  const [llPixelCache, setLlPixelCache] = React.useState<Record<string, string[] | null>>({});
+  const [llPixelLoading, setLlPixelLoading] = React.useState(false);
+  const [llTracklistOpen, setLlTracklistOpen] = React.useState(true);
+  const llPixelFetchedRef = React.useRef<Set<string>>(new Set());
+  const llFetchingRef = React.useRef<Set<string>>(new Set());
+  const llLeaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
   React.useEffect(() => {
     const themes: Theme[] = ['light', 'dracula', 'gruvbox', 'github', 'monokai', 'tokyo', 'catppuccin', 'onedark'];
     themes.forEach((t) => document.body.classList.remove(`theme-${t}`));
     document.body.classList.add(`theme-${theme}`);
   }, [theme]);
+
+  React.useEffect(() => {
+    if (appMode !== 'listen-later' || !sessionUsername) return;
+    fetch('/api/listen-later')
+      .then((r) => r.json())
+      .then((d: { items?: { artist: string; album: string; added_at: string }[] }) => {
+        if (d.items) {
+          setListenLaterItems(d.items);
+          setListenLaterSet(new Set(d.items.map((i) => `${i.artist}|||${i.album}`)));
+        }
+      })
+      .catch(() => {});
+  }, [appMode]);
+
+  // Reset scrobble state and fire now-playing when track changes
+  React.useEffect(() => {
+    if (scrobbleTimerRef.current) { clearInterval(scrobbleTimerRef.current); scrobbleTimerRef.current = null; }
+    scrobbledRef.current = false;
+    elapsedRef.current = 0;
+    playSegmentStartRef.current = null;
+    scrobbleStartRef.current = Math.floor(Date.now() / 1000);
+
+    if (!ytEmbed) return;
+
+    const sep = ytEmbed.title.indexOf(' — ');
+    if (sep === -1) return;
+    const artist = ytEmbed.title.slice(0, sep);
+    const track = ytEmbed.title.slice(sep + 3);
+    const album = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0
+      ? albums[ytEmbed.albumIdx]?.name
+      : ytEmbed.source === 'listen-later' && ytEmbed.albumIdx >= 0
+      ? listenLaterItems[ytEmbed.albumIdx]?.album
+      : undefined;
+
+    fetch('/api/scrobble/now-playing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ artist, track, ...(album ? { album } : {}) }),
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytEmbed?.videoId]);
+
+  // Track elapsed play time and fire scrobble at threshold
+  React.useEffect(() => {
+    if (!ytEmbed) return;
+
+    if (ytPlaying) {
+      playSegmentStartRef.current = Date.now();
+      if (!scrobbleTimerRef.current) {
+        scrobbleTimerRef.current = setInterval(() => {
+          if (scrobbledRef.current) { clearInterval(scrobbleTimerRef.current!); scrobbleTimerRef.current = null; return; }
+          const segmentMs = playSegmentStartRef.current ? Date.now() - playSegmentStartRef.current : 0;
+          const totalElapsed = elapsedRef.current + segmentMs / 1000;
+          const duration = ytPlayerActionsRef.current?.getDuration() ?? 0;
+          const threshold = duration > 0 ? Math.min(240, Math.max(30, duration / 2)) : 30;
+          if (totalElapsed >= threshold) {
+            scrobbledRef.current = true;
+            clearInterval(scrobbleTimerRef.current!);
+            scrobbleTimerRef.current = null;
+            const sep = ytEmbed.title.indexOf(' — ');
+            if (sep === -1) return;
+            const artist = ytEmbed.title.slice(0, sep);
+            const track = ytEmbed.title.slice(sep + 3);
+            const album = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0
+              ? albums[ytEmbed.albumIdx]?.name
+              : ytEmbed.source === 'listen-later' && ytEmbed.albumIdx >= 0
+              ? listenLaterItems[ytEmbed.albumIdx]?.album
+              : undefined;
+            fetch('/api/scrobble', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ artist, track, timestamp: scrobbleStartRef.current, ...(album ? { album } : {}) }),
+            }).catch(() => {});
+          }
+        }, 1000);
+      }
+    } else {
+      if (playSegmentStartRef.current !== null) {
+        elapsedRef.current += (Date.now() - playSegmentStartRef.current) / 1000;
+        playSegmentStartRef.current = null;
+      }
+      if (scrobbleTimerRef.current) { clearInterval(scrobbleTimerRef.current); scrobbleTimerRef.current = null; }
+    }
+
+    return () => {
+      if (scrobbleTimerRef.current) { clearInterval(scrobbleTimerRef.current); scrobbleTimerRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytPlaying, ytEmbed?.videoId]);
 
   React.useEffect(() => {
     const activeIndex = lockedAlbumIndex ?? hoveredAlbumIndex;
@@ -303,6 +433,45 @@ export default function Home() {
   React.useEffect(() => {
     setTracklistOpen(false);
   }, [lockedAlbumIndex, hoveredAlbumIndex]);
+
+  // Lazy-fetch album meta for hovered/locked LL item
+  React.useEffect(() => {
+    const activeIndex = llLockedIdx ?? llHoveredIdx;
+    if (activeIndex === null) return;
+    const item = listenLaterItems[activeIndex];
+    if (!item) return;
+    const key = `${item.artist}|||${item.album}`;
+    if (llFetchingRef.current.has(key) || key in llAlbumMetas) return;
+    llFetchingRef.current.add(key);
+    fetch(`/api/album-info?artist=${encodeURIComponent(item.artist)}&album=${encodeURIComponent(item.album)}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((meta: AlbumMeta | null) => { setLlAlbumMetas((prev) => ({ ...prev, [key]: meta })); llFetchingRef.current.delete(key); })
+      .catch(() => { setLlAlbumMetas((prev) => ({ ...prev, [key]: null })); llFetchingRef.current.delete(key); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [llLockedIdx, llHoveredIdx, listenLaterItems]);
+
+  // Pixel art for hovered/locked LL item
+  React.useEffect(() => {
+    const activeIndex = llLockedIdx ?? llHoveredIdx;
+    if (activeIndex === null) return;
+    const item = listenLaterItems[activeIndex];
+    if (!item) return;
+    const key = `${item.artist}|||${item.album}`;
+    if (llPixelFetchedRef.current.has(key)) return;
+    const artUrl = llAlbumMetas[key]?.artUrl;
+    if (!artUrl) return;
+    llPixelFetchedRef.current.add(key);
+    setLlPixelLoading(true);
+    fetch(`/api/pixel-art?artUrl=${encodeURIComponent(artUrl)}`)
+      .then((r) => r.json())
+      .then((data) => setLlPixelCache((prev) => ({ ...prev, [key]: data.pixels ?? null })))
+      .catch(() => setLlPixelCache((prev) => ({ ...prev, [key]: null })))
+      .finally(() => setLlPixelLoading(false));
+  }, [llLockedIdx, llHoveredIdx, llAlbumMetas, listenLaterItems]);
+
+  React.useEffect(() => {
+    setLlTracklistOpen(false);
+  }, [llLockedIdx, llHoveredIdx]);
 
   const closeYtEmbed = React.useCallback(() => {
     setYtEmbed(null);
@@ -363,8 +532,19 @@ export default function Home() {
     const sep = ytEmbed.title.indexOf(' — ');
     const artist = sep !== -1 ? ytEmbed.title.slice(0, sep) : ytEmbed.title;
     const trackName = sep !== -1 ? ytEmbed.title.slice(sep + 3) : '';
-    const albumName = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0 ? albums[ytEmbed.albumIdx]?.name ?? null : null;
-    const artUrl = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0 ? albumMetas[ytEmbed.albumIdx]?.artUrl ?? null : null;
+    const albumName = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0
+      ? albums[ytEmbed.albumIdx]?.name ?? null
+      : ytEmbed.source === 'listen-later' && ytEmbed.albumIdx >= 0
+      ? listenLaterItems[ytEmbed.albumIdx]?.album ?? null
+      : null;
+    const llMetaKey = ytEmbed.source === 'listen-later' && ytEmbed.albumIdx >= 0
+      ? `${listenLaterItems[ytEmbed.albumIdx]?.artist}|||${listenLaterItems[ytEmbed.albumIdx]?.album}`
+      : null;
+    const artUrl = ytEmbed.source === 'album' && ytEmbed.albumIdx >= 0
+      ? albumMetas[ytEmbed.albumIdx]?.artUrl ?? null
+      : llMetaKey
+      ? llAlbumMetas[llMetaKey]?.artUrl ?? null
+      : null;
 
     const bodyStyle = getComputedStyle(document.body);
     const bgColor = bodyStyle.getPropertyValue('--theme-background').trim() || '#1e1e2e';
@@ -470,18 +650,24 @@ export default function Home() {
     link.download = `lyrics-${artist}-${trackName}.png`.replace(/[^a-z0-9.-]/gi, '-').toLowerCase();
     link.href = canvas.toDataURL('image/png');
     link.click();
-  }, [ytEmbed, lyrics, lyricSelection, albums, albumMetas]);
+  }, [ytEmbed, lyrics, lyricSelection, albums, albumMetas, llAlbumMetas, listenLaterItems]);
 
   const handleAutoNext = React.useCallback(() => {
     if (!ytEmbed) return;
     if (ytEmbed.source === 'tracks') {
       if (tracks[ytEmbed.trackIdx + 1]) handleTrackNavigate(ytEmbed.trackIdx + 1);
+    } else if (ytEmbed.source === 'listen-later') {
+      const item = listenLaterItems[ytEmbed.albumIdx];
+      const metaKey = item ? `${item.artist}|||${item.album}` : null;
+      const meta = metaKey ? llAlbumMetas[metaKey] : null;
+      if (meta?.tracks[ytEmbed.trackIdx + 1]) handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1);
     } else {
       if (albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1]) {
         handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1);
       }
     }
-  }, [ytEmbed, tracks, albumMetas]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ytEmbed, tracks, albumMetas, llAlbumMetas, listenLaterItems]);
 
   const ytPlayingRef = React.useRef(ytPlaying);
   React.useEffect(() => { ytPlayingRef.current = ytPlaying; });
@@ -647,6 +833,46 @@ export default function Home() {
 
   const handleAlbumClick = (index: number) => {
     setLockedAlbumIndex((prev) => prev === index ? null : index);
+  };
+
+  const handleLlHover = (index: number) => {
+    if (llLockedIdx !== null) return;
+    if (llLeaveTimer.current) { clearTimeout(llLeaveTimer.current); llLeaveTimer.current = null; }
+    setLlHoveredIdx(index);
+  };
+
+  const handleLlLeave = () => {
+    if (llLockedIdx !== null) return;
+    llLeaveTimer.current = setTimeout(() => setLlHoveredIdx(null), 300);
+  };
+
+  const handleLlClick = (index: number) => {
+    setLlLockedIdx((prev) => prev === index ? null : index);
+  };
+
+  const handleLlYtNavigate = async (llIdx: number, trackIdx: number) => {
+    if (ytNavLoading) return;
+    const item = listenLaterItems[llIdx];
+    const metaKey = item ? `${item.artist}|||${item.album}` : null;
+    const meta = metaKey ? llAlbumMetas[metaKey] : null;
+    const track = meta?.tracks[trackIdx];
+    if (!track || !item) return;
+    const cacheKey = `${item.artist}::${track.name}`;
+    if (ytVideoCacheRef.current[cacheKey]) {
+      setYtEmbed({ videoId: ytVideoCacheRef.current[cacheKey], title: `${item.artist} — ${track.name}`, source: 'listen-later', albumIdx: llIdx, trackIdx });
+      return;
+    }
+    setYtNavLoading(true);
+    try {
+      const res = await fetch(`/api/yt-link?artist=${encodeURIComponent(item.artist)}&track=${encodeURIComponent(track.name)}`);
+      const data = await res.json();
+      if (data.videoId) {
+        ytVideoCacheRef.current[cacheKey] = data.videoId;
+        setYtEmbed({ videoId: data.videoId, title: `${item.artist} — ${track.name}`, source: 'listen-later', albumIdx: llIdx, trackIdx });
+      }
+    } finally {
+      setYtNavLoading(false);
+    }
   };
 
   const handleNeighborClick = (index: number) => {
@@ -901,13 +1127,346 @@ export default function Home() {
         { hotkey: 'K', body: ytPlaying ? 'PAUSE' : 'PLAY', onClick: () => ytPlaying ? ytPlayerActionsRef.current?.pause() : ytPlayerActionsRef.current?.play() },
         { hotkey: 'ESC', body: 'STOP', onClick: closeYtEmbed },
       ] : []}
-      rightItems={[{ hotkey: '♥', body: 'SUPPORT', onClick: () => window.open('https://deionmenor.com', '_blank') }]}
+      center={(() => {
+        if (ytEmbed) {
+          const sep = ytEmbed.title.indexOf(' — ');
+          const artist = sep !== -1 ? ytEmbed.title.slice(0, sep) : '';
+          const track = sep !== -1 ? ytEmbed.title.slice(sep + 3) : ytEmbed.title;
+          return `${ytPlaying ? '♪' : '‖'} ${track} — ${artist}`;
+        }
+        return sessionUsername ? `@${sessionUsername.toUpperCase()}` : undefined;
+      })()}
+      rightItems={[
+        sessionUsername
+          ? { body: 'LOGOUT', onClick: () => fetch('/api/auth/logout', { method: 'POST' }).then(() => setSessionUsername(null)) }
+          : { body: 'LOGIN', onClick: () => { window.location.href = '/api/auth/login'; } },
+        { hotkey: '♥', body: 'SUPPORT', onClick: () => window.open('https://deionmenor.com', '_blank') },
+      ]}
     >
-      <ThemeDropdown label={appMode === 'rank' ? 'RANK MODE' : 'CHARTS'} items={APP_MODES} currentId={appMode} onSelect={(id) => setAppMode(id as 'charts' | 'rank')} />
+      <ThemeDropdown
+        label={appMode === 'rank' ? 'RANK MODE' : appMode === 'listen-later' ? 'LISTEN LATER' : 'CHARTS'}
+        items={[...APP_MODES, ...(sessionUsername ? [{ id: 'listen-later', label: 'LISTEN LATER' }] : [])]}
+        currentId={appMode}
+        onSelect={(id) => setAppMode(id as 'charts' | 'rank' | 'listen-later')}
+      />
       <ThemeDropdown hotkey="◑" label="THEME" items={THEMES} currentId={theme} onSelect={(id) => setTheme(id as Theme)} />
     </ActionBar>
     <main className={styles.main}>
       {appMode === 'rank' && <RankMode />}
+      {appMode === 'listen-later' && (
+        <div className={styles.pageRow}>
+          <div className={styles.container}>
+            {ytEmbed && !ytMini ? (
+              <Card title={ytEmbed.title}>
+                <div className={styles.ytEmbedWrapper}>
+                  <YoutubePlayer videoId={ytEmbed.videoId} onEnded={handleAutoNext} onPlayingChange={setYtPlaying} onPlayerReady={(a) => { ytPlayerActionsRef.current = a; }} />
+                </div>
+                <div className={styles.ytControls}>
+                  <div className={styles.ytNavButtons}>
+                    {ytEmbed.source === 'tracks' ? (
+                      <>
+                        {ytEmbed.trackIdx > 0 && (
+                          <ActionButton hotkey="←" onClick={() => handleTrackNavigate(ytEmbed.trackIdx - 1)}>
+                            {ytNavLoading ? '...' : 'PREV'}
+                          </ActionButton>
+                        )}
+                        {tracks[ytEmbed.trackIdx + 1] && (
+                          <ActionButton hotkey="→" onClick={() => handleTrackNavigate(ytEmbed.trackIdx + 1)}>
+                            {ytNavLoading ? '...' : 'NEXT'}
+                          </ActionButton>
+                        )}
+                      </>
+                    ) : (() => {
+                      const isLL = ytEmbed.source === 'listen-later';
+                      const llItem = isLL ? listenLaterItems[ytEmbed.albumIdx] : null;
+                      const llMKey = llItem ? `${llItem.artist}|||${llItem.album}` : null;
+                      const llM = llMKey ? llAlbumMetas[llMKey] : null;
+                      const hasNext = isLL ? !!llM?.tracks[ytEmbed.trackIdx + 1] : !!albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1];
+                      return (
+                        <>
+                          {ytEmbed.trackIdx > 0 && (
+                            <ActionButton hotkey="←" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
+                              {ytNavLoading ? '...' : 'PREV'}
+                            </ActionButton>
+                          )}
+                          {hasNext && (
+                            <ActionButton hotkey="→" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
+                              {ytNavLoading ? '...' : 'NEXT'}
+                            </ActionButton>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className={styles.ytNavButtons}>
+                    <ActionButton
+                      isSelected={lyricsOpen}
+                      onClick={() => {
+                        const next = !lyricsOpen;
+                        setLyricsOpen(next);
+                        if (next && !lyrics && ytEmbed) {
+                          const sep = ytEmbed.title.indexOf(' — ');
+                          if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
+                        }
+                      }}
+                    >
+                      LYRICS
+                    </ActionButton>
+                    <ActionButton hotkey="⊟" onClick={() => setYtMini(true)}>MINI</ActionButton>
+                    <ActionButton hotkey="ESC" onClick={closeYtEmbed}>EXIT</ActionButton>
+                  </div>
+                </div>
+                {lyricsOpen && (
+                  <div className={styles.lyricsPanel}>
+                    <LyricsContent lyrics={lyrics} loading={lyricsLoading} selection={lyricSelection} onLineClick={lyrics?.plain ? handleLyricLineClick : undefined} />
+                    {lyricSelection && (
+                      <div className={styles.lyricsExportRow}>
+                        <button className={styles.lyricsExportBtn} onClick={handleLyricsExport}>
+                          ↓ EXPORT {lyricSelection[1] - lyricSelection[0] + 1} LINE{lyricSelection[1] !== lyricSelection[0] ? 'S' : ''}
+                        </button>
+                        <button className={styles.lyricsExportBtn} onClick={() => { setLyricAnchor(null); setLyricSelection(null); }}>
+                          ✕ CLEAR
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            ) : (
+              <Card title={`LISTEN LATER${listenLaterItems.length > 0 ? ` — ${listenLaterItems.length} ALBUM${listenLaterItems.length !== 1 ? 'S' : ''}` : ''}`}>
+                {listenLaterItems.length === 0 ? (
+                  <div className={styles.sidebarLoading}>NO SAVED ALBUMS.</div>
+                ) : (
+                  <SimpleTable
+                    data={[
+                      ['ARTIST', 'ALBUM', 'SAVED'],
+                      ...listenLaterItems.map((item) => [item.artist, formatName(item.album), item.added_at.slice(0, 10)]),
+                    ]}
+                    onRowHover={handleLlHover}
+                    onRowClick={handleLlClick}
+                    onTableLeave={handleLlLeave}
+                    selectedRow={llLockedIdx ?? llHoveredIdx ?? undefined}
+                    animate
+                    headerVariant="red"
+                  />
+                )}
+              </Card>
+            )}
+          </div>
+
+          <div className={styles.sidebarCol}>
+            {ytEmbed && ytMini && (
+              <Card title={ytEmbed.title}>
+                <div className={styles.ytEmbedWrapper}>
+                  <YoutubePlayer videoId={ytEmbed.videoId} onEnded={handleAutoNext} />
+                </div>
+                <div className={styles.ytControls}>
+                  <div className={styles.ytNavButtons}>
+                    {ytEmbed.source === 'tracks' ? (
+                      <>
+                        {ytEmbed.trackIdx > 0 && (
+                          <ActionButton hotkey="←" onClick={() => handleTrackNavigate(ytEmbed.trackIdx - 1)}>
+                            {ytNavLoading ? '...' : 'PREV'}
+                          </ActionButton>
+                        )}
+                        {tracks[ytEmbed.trackIdx + 1] && (
+                          <ActionButton hotkey="→" onClick={() => handleTrackNavigate(ytEmbed.trackIdx + 1)}>
+                            {ytNavLoading ? '...' : 'NEXT'}
+                          </ActionButton>
+                        )}
+                      </>
+                    ) : (() => {
+                      const isLL = ytEmbed.source === 'listen-later';
+                      const llItem = isLL ? listenLaterItems[ytEmbed.albumIdx] : null;
+                      const llMKey = llItem ? `${llItem.artist}|||${llItem.album}` : null;
+                      const llM = llMKey ? llAlbumMetas[llMKey] : null;
+                      const hasNext = isLL ? !!llM?.tracks[ytEmbed.trackIdx + 1] : !!albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1];
+                      return (
+                        <>
+                          {ytEmbed.trackIdx > 0 && (
+                            <ActionButton hotkey="←" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
+                              {ytNavLoading ? '...' : 'PREV'}
+                            </ActionButton>
+                          )}
+                          {hasNext && (
+                            <ActionButton hotkey="→" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
+                              {ytNavLoading ? '...' : 'NEXT'}
+                            </ActionButton>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div className={styles.ytNavButtons}>
+                    <ActionButton
+                      isSelected={lyricsOpen}
+                      onClick={() => {
+                        const next = !lyricsOpen;
+                        setLyricsOpen(next);
+                        if (next && !lyrics && ytEmbed) {
+                          const sep = ytEmbed.title.indexOf(' — ');
+                          if (sep !== -1) fetchLyrics(ytEmbed.title.slice(0, sep), ytEmbed.title.slice(sep + 3));
+                        }
+                      }}
+                    >
+                      LYRICS
+                    </ActionButton>
+                    <ActionButton hotkey="⊞" onClick={() => setYtMini(false)}>EXPAND</ActionButton>
+                    <ActionButton hotkey="ESC" onClick={closeYtEmbed}>EXIT</ActionButton>
+                  </div>
+                </div>
+                {lyricsOpen && (
+                  <div className={styles.lyricsPanel}>
+                    <LyricsContent lyrics={lyrics} loading={lyricsLoading} selection={lyricSelection} onLineClick={lyrics?.plain ? handleLyricLineClick : undefined} />
+                    {lyricSelection && (
+                      <div className={styles.lyricsExportRow}>
+                        <button className={styles.lyricsExportBtn} onClick={handleLyricsExport}>
+                          ↓ EXPORT {lyricSelection[1] - lyricSelection[0] + 1} LINE{lyricSelection[1] !== lyricSelection[0] ? 'S' : ''}
+                        </button>
+                        <button className={styles.lyricsExportBtn} onClick={() => { setLyricAnchor(null); setLyricSelection(null); }}>
+                          ✕ CLEAR
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Card>
+            )}
+            <div className={styles.sidebar}>
+              {(() => {
+                const activeIndex = llLockedIdx ?? llHoveredIdx;
+                const activeItem = activeIndex !== null ? listenLaterItems[activeIndex] : null;
+                if (!activeItem) return (
+                  <Card title="LISTEN LATER">
+                    <div className={styles.sidebarIntro}>
+                      <p>Your saved albums appear here. Hover an album to preview it, click to lock the panel and see the full tracklist.</p>
+                    </div>
+                  </Card>
+                );
+                const llKey = `${activeItem.artist}|||${activeItem.album}`;
+                const activeMeta = llAlbumMetas[llKey] ?? null;
+                const pixels = llPixelCache[llKey];
+                const isLoading = llFetchingRef.current.has(llKey);
+
+                return (
+                  <Card title="ALBUM INFO">
+                    <div className={styles.sidebarContent}>
+                      <div className={styles.albumHeader}>
+                        {activeMeta?.artUrl && (
+                          <button
+                            className={styles.albumThumb}
+                            onClick={() => setImageView((v) => v === 'pixel' ? 'original' : 'pixel')}
+                            title={imageView === 'pixel' ? 'Show original' : 'Show pixel art'}
+                          >
+                            {imageView === 'pixel' ? (
+                              llPixelLoading && !pixels
+                                ? <div className={styles.thumbPlaceholder} />
+                                : pixels
+                                ? <div className={styles.pixelGrid}>{pixels.map((c, i) => <div key={i} className={styles.pixelCell} style={{ backgroundColor: c }} />)}</div>
+                                : <div className={styles.thumbPlaceholder} />
+                            ) : (
+                              <img src={activeMeta.artUrl} alt={activeItem.album} className={styles.thumbImg} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            )}
+                          </button>
+                        )}
+                        <div className={styles.albumHeaderInfo}>
+                          <div className={styles.albumTitle}>{formatName(activeItem.album)}</div>
+                          <div className={styles.albumSubtitle}>{activeItem.artist}</div>
+                        </div>
+                      </div>
+
+                      <button
+                        className={styles.listenLaterBtn}
+                        onClick={() => {
+                          fetch('/api/listen-later', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artist: activeItem.artist, album: activeItem.album }) }).catch(() => {});
+                          setListenLaterSet((prev) => { const next = new Set(prev); next.delete(llKey); return next; });
+                          setListenLaterItems((prev) => prev.filter((i) => !(i.artist === activeItem.artist && i.album === activeItem.album)));
+                          setLlLockedIdx(null);
+                          setLlHoveredIdx(null);
+                        }}
+                      >
+                        ◆ REMOVE
+                      </button>
+
+                      {isLoading && !activeMeta && <div className={styles.sidebarLoading}>LOADING...</div>}
+
+                      {activeMeta && (
+                        <>
+                          <div className={styles.statsRow}>
+                            {activeMeta.releaseDate && (
+                              <div className={styles.statItem}>
+                                <span className={styles.statValue}>{activeMeta.releaseDate.slice(0, 4)}</span>
+                                <span className={styles.statLabel}>◈</span>
+                              </div>
+                            )}
+                            <div className={styles.statItem}>
+                              <span className={styles.statValue}>{formatDuration(activeMeta.totalDuration)}</span>
+                              <span className={styles.statLabel}>◷</span>
+                            </div>
+                            <div className={styles.statItem}>
+                              <span className={styles.statValue}>{formatCount(activeMeta.listeners)}</span>
+                              <span className={styles.statLabel}>◉</span>
+                            </div>
+                            <div className={styles.statItem}>
+                              <span className={styles.statValue}>{formatCount(activeMeta.playcount)}</span>
+                              <span className={styles.statLabel}>↺</span>
+                            </div>
+                          </div>
+
+                          {activeMeta.tags.slice(0, 3).length > 0 && (
+                            <div className={styles.tags}>
+                              {activeMeta.tags.slice(0, 3).join(' · ')}
+                            </div>
+                          )}
+
+                          {activeMeta.tracks.length > 0 && (
+                            <div className={styles.tracklistSection}>
+                              <button className={styles.tracklistToggle} onClick={() => setLlTracklistOpen((o) => !o)}>
+                                {llTracklistOpen ? '▼' : '▶'} TRACKLIST
+                              </button>
+                              {llTracklistOpen && (() => {
+                                const withPlays = activeMeta.tracks.filter((t) => t.playcount > 0);
+                                const hotSet = new Set(
+                                  [...withPlays].sort((a, b) => b.playcount - a.playcount).slice(0, 3).map((t) => t.rank)
+                                );
+                                return (
+                                  <div className={styles.sidebarTracks}>
+                                    {activeMeta.tracks.map((t, tIdx) => (
+                                      <div key={t.rank} className={styles.sidebarTrack}>
+                                        <span className={styles.sidebarTrackNum}>{t.rank}.</span>
+                                        <span className={styles.sidebarTrackName}>{formatName(t.name)}</span>
+                                        {hotSet.has(t.rank) && (
+                                          <Tooltip content={`${t.playcount.toLocaleString()} plays`}>
+                                            <span className={styles.hotDot} />
+                                          </Tooltip>
+                                        )}
+                                        {t.duration > 0 && (
+                                          <span className={styles.sidebarTrackDur}>
+                                            {Math.floor(t.duration / 60)}:{String(t.duration % 60).padStart(2, '0')}
+                                          </span>
+                                        )}
+                                        <TrackYtButton
+                                          artist={activeItem.artist}
+                                          track={t.name}
+                                          onPlay={(videoId) => setYtEmbed({ videoId, title: `${activeItem.artist} — ${t.name}`, source: 'listen-later', albumIdx: activeIndex!, trackIdx: tIdx })}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </Card>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
       {appMode === 'charts' && <>
       <div className={styles.banner}>
         <Card title="MUSILOG.FM">
@@ -996,20 +1555,29 @@ export default function Home() {
                           </ActionButton>
                         )}
                       </>
-                    ) : (
-                      <>
-                        {ytEmbed.trackIdx > 0 && (
-                          <ActionButton hotkey="←" onClick={() => handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
-                            {ytNavLoading ? '...' : 'PREV'}
-                          </ActionButton>
-                        )}
-                        {albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1] && (
-                          <ActionButton hotkey="→" onClick={() => handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
-                            {ytNavLoading ? '...' : 'NEXT'}
-                          </ActionButton>
-                        )}
-                      </>
-                    )}
+                    ) : (() => {
+                      const isLL = ytEmbed.source === 'listen-later';
+                      const llItem = isLL ? listenLaterItems[ytEmbed.albumIdx] : null;
+                      const llMetaKey = llItem ? `${llItem.artist}|||${llItem.album}` : null;
+                      const llMeta = llMetaKey ? llAlbumMetas[llMetaKey] : null;
+                      const hasNext = isLL
+                        ? !!llMeta?.tracks[ytEmbed.trackIdx + 1]
+                        : !!albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1];
+                      return (
+                        <>
+                          {ytEmbed.trackIdx > 0 && (
+                            <ActionButton hotkey="←" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
+                              {ytNavLoading ? '...' : 'PREV'}
+                            </ActionButton>
+                          )}
+                          {hasNext && (
+                            <ActionButton hotkey="→" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
+                              {ytNavLoading ? '...' : 'NEXT'}
+                            </ActionButton>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className={styles.ytNavButtons}>
                     <ActionButton
@@ -1184,20 +1752,29 @@ export default function Home() {
                       </ActionButton>
                     )}
                   </>
-                ) : (
-                  <>
-                    {ytEmbed.trackIdx > 0 && (
-                      <ActionButton hotkey="←" onClick={() => handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
-                        {ytNavLoading ? '...' : 'PREV'}
-                      </ActionButton>
-                    )}
-                    {albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1] && (
-                      <ActionButton hotkey="→" onClick={() => handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
-                        {ytNavLoading ? '...' : 'NEXT'}
-                      </ActionButton>
-                    )}
-                  </>
-                )}
+                ) : (() => {
+                  const isLL = ytEmbed.source === 'listen-later';
+                  const llItem = isLL ? listenLaterItems[ytEmbed.albumIdx] : null;
+                  const llMetaKey = llItem ? `${llItem.artist}|||${llItem.album}` : null;
+                  const llMeta = llMetaKey ? llAlbumMetas[llMetaKey] : null;
+                  const hasNext = isLL
+                    ? !!llMeta?.tracks[ytEmbed.trackIdx + 1]
+                    : !!albumMetas[ytEmbed.albumIdx]?.tracks[ytEmbed.trackIdx + 1];
+                  return (
+                    <>
+                      {ytEmbed.trackIdx > 0 && (
+                        <ActionButton hotkey="←" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx - 1)}>
+                          {ytNavLoading ? '...' : 'PREV'}
+                        </ActionButton>
+                      )}
+                      {hasNext && (
+                        <ActionButton hotkey="→" onClick={() => isLL ? handleLlYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1) : handleYtNavigate(ytEmbed.albumIdx, ytEmbed.trackIdx + 1)}>
+                          {ytNavLoading ? '...' : 'NEXT'}
+                        </ActionButton>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
               <div className={styles.ytNavButtons}>
                 <ActionButton
@@ -1278,6 +1855,27 @@ export default function Home() {
                     <div className={styles.albumSubtitle}>{activeAlbum.artist}</div>
                   </div>
                 </div>
+
+                {sessionUsername && (() => {
+                  const key = `${activeAlbum.artist}|||${activeAlbum.name}`;
+                  const saved = listenLaterSet.has(key);
+                  return (
+                    <button
+                      className={`${styles.listenLaterBtn}${saved ? ` ${styles.saved}` : ''}`}
+                      onClick={() => {
+                        if (saved) {
+                          fetch('/api/listen-later', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artist: activeAlbum.artist, album: activeAlbum.name }) }).catch(() => {});
+                          setListenLaterSet((prev) => { const next = new Set(prev); next.delete(key); return next; });
+                        } else {
+                          fetch('/api/listen-later', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artist: activeAlbum.artist, album: activeAlbum.name }) }).catch(() => {});
+                          setListenLaterSet((prev) => new Set(prev).add(key));
+                        }
+                      }}
+                    >
+                      {saved ? '◆ SAVED' : '◇ LISTEN LATER'}
+                    </button>
+                  );
+                })()}
 
                 {albumMetasLoading && !activeMeta && <div className={styles.sidebarLoading}>LOADING...</div>}
 
