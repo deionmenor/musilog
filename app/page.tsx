@@ -1625,7 +1625,8 @@ export default function Home() {
                   { body: 'TOP ALBUMS',  selected: fetchMode === 'albums',    onClick: () => handleModeClick('albums') },
                   { body: 'TOP ARTISTS', selected: fetchMode === 'artists',   onClick: () => handleModeClick('artists') },
                   { body: 'TOP SONGS',   selected: fetchMode === 'tracks',    onClick: () => handleModeClick('tracks') },
-                  { body: 'NEIGHBOURS',  selected: fetchMode === 'neighbors', onClick: () => handleModeClick('neighbors') },
+                  // Hidden for now — the neighbours feature is unstable.
+                  // { body: 'NEIGHBOURS',  selected: fetchMode === 'neighbors', onClick: () => handleModeClick('neighbors') },
                   { body: 'OVERVIEW',    selected: fetchMode === 'stats',     onClick: () => handleModeClick('stats') },
                 ]}
               />
