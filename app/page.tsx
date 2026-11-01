@@ -237,12 +237,16 @@ const APP_MODES = [
   { id: 'rank', label: 'RANK MODE' },
 ];
 
+// Shown to first-time visitors so the site has stats to display immediately.
+const EXAMPLE_USERNAME = 'deenulatr';
+
 export default function Home() {
   const [appMode, setAppMode] = React.useState<'charts' | 'rank' | 'listen-later'>('charts');
   const [theme, setTheme] = React.useState<Theme>('github');
   const [username, setUsername] = React.useState('');
   const [period, setPeriod] = React.useState<Period>('overall');
   const [sessionUsername, setSessionUsername] = React.useState<string | null>(null);
+  const [isExampleProfile, setIsExampleProfile] = React.useState(false);
   const [listenLaterSet, setListenLaterSet] = React.useState<Set<string>>(new Set());
   const [listenLaterItems, setListenLaterItems] = React.useState<{ artist: string; album: string; added_at: string }[]>([]);
 
@@ -265,12 +269,22 @@ export default function Home() {
             .catch(() => {});
         } else {
           const saved = localStorage.getItem('lastfm-username');
-          if (saved) setUsername(saved);
+          if (saved) {
+            setUsername(saved);
+          } else {
+            setUsername(EXAMPLE_USERNAME);
+            setIsExampleProfile(true);
+          }
         }
       })
       .catch(() => {
         const saved = localStorage.getItem('lastfm-username');
-        if (saved) setUsername(saved);
+        if (saved) {
+          setUsername(saved);
+        } else {
+          setUsername(EXAMPLE_USERNAME);
+          setIsExampleProfile(true);
+        }
       });
   }, []);
   const [customDateRange, setCustomDateRange] = React.useState<{ from: string; to: string } | null>(null);
@@ -1586,12 +1600,16 @@ export default function Home() {
                 value={username}
                 onChange={(e) => {
                   setUsername(e.target.value);
+                  setIsExampleProfile(false);
                   localStorage.setItem('lastfm-username', e.target.value);
                   setSavedNeighborState(null);
                 }}
                 onKeyDown={handleKeyDown}
                 isBlink={true}
               />
+              {isExampleProfile && (
+                <div className={styles.hint}>EXAMPLE PROFILE — ENTER YOUR OWN LAST.FM USERNAME</div>
+              )}
               <ButtonGroup
                 isFull
                 items={[
