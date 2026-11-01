@@ -289,7 +289,7 @@ export default function Home() {
   }, []);
   const [customDateRange, setCustomDateRange] = React.useState<{ from: string; to: string } | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [fetchMode, setFetchMode] = React.useState<FetchMode>('artists');
+  const [fetchMode, setFetchMode] = React.useState<FetchMode>('stats');
   const [showPlays, setShowPlays] = React.useState(true);
   const [resultsExpanded, setResultsExpanded] = React.useState(false);
   const [artists, setArtists] = React.useState<Artist[]>([]);
@@ -875,6 +875,15 @@ export default function Home() {
     setFetchMode(mode);
     handleFetch(mode);
   };
+
+  // Open on the overview as soon as a username is known rather than leaving the page empty.
+  const didAutoFetchRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!username.trim() || didAutoFetchRef.current) return;
+    didAutoFetchRef.current = true;
+    handleFetch('stats');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [username]);
 
   const handleAlbumHover = (index: number) => {
     if (lockedAlbumIndex !== null) return;
