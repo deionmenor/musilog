@@ -86,6 +86,7 @@ function YoutubePlayer({ videoId, onEnded, onPlayingChange, onPlayerReady }: Pro
         pause: () => { try { ytPlayer.pauseVideo(); } catch {} },
         play:  () => { try { ytPlayer.playVideo();  } catch {} },
         getCurrentTime: () => { try { return ytPlayer.getCurrentTime() ?? 0; } catch { return 0; } },
+        getDuration: () => { try { return ytPlayer.getDuration() ?? 0; } catch { return 0; } },
       };
       cbOnPlayerReady.current?.(actions);
 
